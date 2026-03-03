@@ -8,6 +8,7 @@ from fastapi import FastAPI
 
 from fastapi_sse_events.broker import EventBroker
 from fastapi_sse_events.config import RealtimeConfig
+from fastapi_sse_events.health import create_health_router
 from fastapi_sse_events.redis_backend import RedisBackend
 from fastapi_sse_events.sse import create_sse_endpoint
 from fastapi_sse_events.types import AuthorizeFn
@@ -19,6 +20,7 @@ def mount_sse(
     app: FastAPI,
     config: RealtimeConfig | None = None,
     authorize: AuthorizeFn | None = None,
+    include_health_checks: bool = True,
 ) -> EventBroker:
     """
     Mount SSE event streaming to a FastAPI application.
@@ -28,11 +30,13 @@ def mount_sse(
     2. Registers SSE endpoint at configured path
     3. Sets up startup/shutdown handlers for Redis connection
     4. Exposes broker via app.state for easy access
+    5. Optionally includes health check endpoints
 
     Args:
         app: FastAPI application instance
         config: Configuration (uses defaults if not provided)
         authorize: Optional authorization callback for topic access
+        include_health_checks: Whether to include /health endpoints (default: True)
 
     Returns:
         EventBroker instance for publishing events
@@ -47,10 +51,11 @@ def mount_sse(
         # Mount SSE with default config
         broker = mount_sse(app)
 
-        # Or with custom config
+        # Or with custom config optimized for 100K users
         config = RealtimeConfig(
             redis_url="redis://localhost:6379/0",
-            heartbeat_seconds=30,
+            max_connections=10000,  # Per instance
+            max_queue_size=50,
         )
         broker = mount_sse(app, config)
 
@@ -101,6 +106,7 @@ def mount_sse(
 
             # Shutdown
             logger.info("Shutting down SSE event system...")
+            await broker.close()  # Close broker and fan-out manager
             await redis_backend.disconnect()
             logger.info("SSE event system stopped")
 
@@ -119,6 +125,7 @@ def mount_sse(
         async def shutdown_event() -> None:
             """Close Redis connection on shutdown."""
             logger.info("Shutting down SSE event system...")
+            await broker.close()  # Close broker and fan-out manager
             await redis_backend.disconnect()
             logger.info("SSE event system stopped")
 
@@ -132,5 +139,11 @@ def mount_sse(
     )(sse_endpoint)
 
     logger.info("SSE endpoint mounted at: %s", config.sse_path)
+
+    # Include health check endpoints for monitoring
+    if include_health_checks:
+        health_router = create_health_router()
+        app.include_router(health_router)
+        logger.info("Health check endpoints mounted: /health, /metrics")
 
     return broker

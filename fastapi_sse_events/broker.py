@@ -7,6 +7,8 @@ import time
 from typing import Any, AsyncGenerator
 
 from fastapi_sse_events.config import RealtimeConfig
+from fastapi_sse_events.fanout import FanOutManager
+from fastapi_sse_events.metrics import get_metrics_collector
 from fastapi_sse_events.redis_backend import RedisBackend
 from fastapi_sse_events.types import EventData
 
@@ -18,6 +20,7 @@ class EventBroker:
     Event broker for publishing and subscribing to SSE events via Redis.
 
     Handles event serialization, SSE message formatting, and heartbeat generation.
+    Uses fan-out pattern for efficient Redis connection management.
     """
 
     def __init__(self, config: RealtimeConfig, redis_backend: RedisBackend):
@@ -30,17 +33,32 @@ class EventBroker:
         """
         self.config = config
         self.redis = redis_backend
-        self._event_id_counter = 0
+        
+        # Fan-out manager for efficient subscriptions
+        self._fanout = FanOutManager(
+            redis_backend,
+            max_queue_size=config.max_queue_size
+        )
+        
+        # Connection tracking
+        self._active_connections = 0
+        self._connection_lock = asyncio.Lock()
+        
+        # Shared heartbeat
+        self._heartbeat_task: asyncio.Task | None = None
+        self._heartbeat_queues: set[asyncio.Queue] = set()
+        
+        # Metrics collector
+        self._metrics = get_metrics_collector()
 
     def _generate_event_id(self) -> str:
         """
-        Generate a unique event ID.
+        Generate a distributed-safe unique event ID.
 
         Returns:
-            Event ID string combining timestamp and counter
+            Event ID string with instance ID, timestamp, and counter
         """
-        self._event_id_counter += 1
-        return f"{int(time.time() * 1000)}-{self._event_id_counter}"
+        return self._fanout.generate_event_id()
 
     def _format_sse_message(self, event_data: EventData) -> str:
         """
@@ -82,6 +100,9 @@ class EventBroker:
             event: Event type/name
             data: Event payload dictionary
 
+        Raises:
+            ValueError: If message exceeds size limit
+
         Example:
             await broker.publish(
                 topic="comment_thread:123",
@@ -101,10 +122,29 @@ class EventBroker:
 
         # Serialize to JSON for Redis
         message = event_data.model_dump_json()
+        
+        # Validate message size
+        message_size = len(message.encode('utf-8'))
+        if message_size > self.config.max_message_size:
+            logger.error(
+                f"Message too large: {message_size} bytes (limit: {self.config.max_message_size})"
+            )
+            await self._metrics.record_publish_error()
+            raise ValueError(
+                f"Message size {message_size} exceeds limit {self.config.max_message_size}"
+            )
 
-        # Publish to Redis
-        await self.redis.publish(full_topic, message)
-        logger.info("Published event '%s' to topic '%s'", event, full_topic)
+        # Publish to Redis with latency tracking
+        try:
+            start_time = time.time()
+            await self.redis.publish(full_topic, message)
+            latency_ms = (time.time() - start_time) * 1000
+            
+            await self._metrics.record_message_published(latency_ms)
+            logger.debug("Published event '%s' to topic '%s' (%.2fms)", event, full_topic, latency_ms)
+        except Exception as e:
+            await self._metrics.record_publish_error()
+            raise
 
     async def subscribe(
         self, topics: list[str]
@@ -112,9 +152,8 @@ class EventBroker:
         """
         Subscribe to topics and yield SSE-formatted messages.
 
-        This method listens to Redis pub/sub and yields SSE messages including:
-        - Regular events from the subscribed topics
-        - Periodic heartbeat/ping events to keep the connection alive
+        This method uses fan-out pattern for efficient Redis connection management
+        and includes connection limits, backpressure handling, and shared heartbeats.
 
         Args:
             topics: List of topic names to subscribe to
@@ -122,108 +161,131 @@ class EventBroker:
         Yields:
             SSE-formatted message strings
 
+        Raises:
+            RuntimeError: If max connections exceeded
+
         Example:
             async for sse_message in broker.subscribe(["comment_thread:123"]):
                 # Send to client via StreamingResponse
                 yield sse_message
         """
+        # Check connection limit
+        async with self._connection_lock:
+            if self._active_connections >= self.config.max_connections:
+                logger.warning(
+                    f"Max connections ({self.config.max_connections}) reached"
+                )
+                await self._metrics.record_connection_rejected()
+                raise RuntimeError("Maximum concurrent connections exceeded")
+            self._active_connections += 1
+        
+        await self._metrics.record_connection_opened()
+        logger.info(f"Active connections: {self._active_connections}/{self.config.max_connections}")
+
         # Apply topic prefix to all topics
         full_topics = [self.config.get_topic(topic) for topic in topics]
 
-        # Create async task for Redis subscription
-        redis_task = asyncio.create_task(self._redis_message_loop(full_topics))
-
-        # Create async task for heartbeat
-        heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+        # Create heartbeat queue for this connection
+        heartbeat_queue: asyncio.Queue[str] = asyncio.Queue(maxsize=1)
+        self._heartbeat_queues.add(heartbeat_queue)
+        
+        # Start shared heartbeat if not running
+        if self._heartbeat_task is None or self._heartbeat_task.done():
+            self._heartbeat_task = asyncio.create_task(self._shared_heartbeat_loop())
 
         try:
-            # Use a queue to merge Redis messages and heartbeats
-            message_queue: asyncio.Queue[str] = asyncio.Queue()
-
-            # Background task to process Redis messages
-            async def process_redis_messages() -> None:
+            # Subscribe using fan-out manager
+            async for message_json in self._fanout.subscribe(full_topics):
+                # Check for heartbeat
                 try:
-                    async for sse_message in redis_task:
-                        await message_queue.put(sse_message)
-                except Exception as e:
-                    logger.error("Redis message processing error: %s", e)
-                finally:
-                    await message_queue.put("")  # Signal end
-
-            # Background task to process heartbeats
-            async def process_heartbeats() -> None:
+                    heartbeat = heartbeat_queue.get_nowait()
+                    yield heartbeat
+                except asyncio.QueueEmpty:
+                    pass
+                
+                # Process Redis message
                 try:
-                    async for heartbeat_message in heartbeat_task:
-                        await message_queue.put(heartbeat_message)
+                    event_data = EventData.model_validate_json(message_json)
+                    sse_message = self._format_sse_message(event_data)
+                    await self._metrics.record_message_delivered()
+                    yield sse_message
                 except Exception as e:
-                    logger.error("Heartbeat processing error: %s", e)
-
-            # Start background tasks
-            redis_processor = asyncio.create_task(process_redis_messages())
-            heartbeat_processor = asyncio.create_task(process_heartbeats())
-
-            # Yield messages from queue
-            while True:
-                message = await message_queue.get()
-                if message == "":  # End signal
-                    break
-                yield message
+                    logger.error("Error processing message: %s", e)
+                    continue
 
         finally:
             # Cleanup
-            redis_task.cancel()
-            heartbeat_task.cancel()
-            try:
-                await redis_task
-            except asyncio.CancelledError:
-                pass
-            try:
-                await heartbeat_task
-            except asyncio.CancelledError:
-                pass
+            self._heartbeat_queues.discard(heartbeat_queue)
+            
+            async with self._connection_lock:
+                self._active_connections -= 1
+            
+            await self._metrics.record_connection_closed()
+            logger.info(f"Active connections: {self._active_connections}/{self.config.max_connections}")
 
-    async def _redis_message_loop(self, topics: list[str]) -> AsyncGenerator[str, None]:
+    async def _shared_heartbeat_loop(self) -> None:
         """
-        Internal generator for Redis pub/sub messages.
-
-        Args:
-            topics: List of topics to subscribe to
-
-        Yields:
-            SSE-formatted messages from Redis
+        Shared heartbeat loop that broadcasts to all connected clients.
+        
+        Uses a single timer instead of one per client for efficiency.
         """
-        async for _topic, message_json in self.redis.subscribe(topics):
-            try:
-                # Deserialize from JSON
-                event_data = EventData.model_validate_json(message_json)
-
+        logger.info("Starting shared heartbeat loop")
+        
+        try:
+            while True:
+                await asyncio.sleep(self.config.heartbeat_seconds)
+                
+                # Create heartbeat event
+                heartbeat_data = EventData(
+                    event="ping",
+                    data={"timestamp": int(time.time())},
+                    id=self._generate_event_id(),
+                )
+                
                 # Format as SSE message
-                sse_message = self._format_sse_message(event_data)
+                sse_message = self._format_sse_message(heartbeat_data)
+                
+                # Broadcast to all heartbeat queues
+                for queue in list(self._heartbeat_queues):
+                    try:
+                        queue.put_nowait(sse_message)
+                    except asyncio.QueueFull:
+                        pass  # Skip if queue full
+                    except Exception as e:
+                        logger.error(f"Error broadcasting heartbeat: {e}")
+        
+        except asyncio.CancelledError:
+            logger.info("Shared heartbeat loop cancelled")
+        except Exception as e:
+            logger.error(f"Shared heartbeat loop error: {e}")
 
-                yield sse_message
-
-            except Exception as e:
-                logger.error("Error processing Redis message: %s", e)
-                continue
-
-    async def _heartbeat_loop(self) -> AsyncGenerator[str, None]:
+    async def get_stats(self) -> dict:
         """
-        Internal generator for heartbeat/ping events.
-
-        Yields:
-            SSE-formatted heartbeat messages at configured intervals
+        Get broker statistics.
+        
+        Returns:
+            Dictionary with broker stats including connections and topics
         """
-        while True:
-            await asyncio.sleep(self.config.heartbeat_seconds)
+        fanout_stats = await self._fanout.get_stats()
+        
+        return {
+            "active_connections": self._active_connections,
+            "max_connections": self.config.max_connections,
+            "heartbeat_clients": len(self._heartbeat_queues),
+            **fanout_stats,
+        }
 
-            # Create heartbeat event
-            heartbeat_data = EventData(
-                event="ping",
-                data={"timestamp": int(time.time())},
-                id=self._generate_event_id(),
-            )
-
-            # Format as SSE message
-            sse_message = self._format_sse_message(heartbeat_data)
-
-            yield sse_message
+    async def close(self) -> None:
+        """Close the broker and cleanup resources."""
+        # Stop heartbeat
+        if self._heartbeat_task and not self._heartbeat_task.done():
+            self._heartbeat_task.cancel()
+            try:
+                await self._heartbeat_task
+            except asyncio.CancelledError:
+                pass
+        
+        # Close fan-out manager
+        await self._fanout.close()
+        
+        logger.info("Event broker closed")

@@ -383,11 +383,19 @@
             eventSource.onopen = () => {
                 document.getElementById('statusDot').classList.add('connected');
                 document.getElementById('statusText').textContent = 'Connected';
+                console.log('SSE connection established');
             };
 
-            eventSource.onerror = () => {
+            eventSource.onerror = (error) => {
                 document.getElementById('statusDot').classList.remove('connected');
                 document.getElementById('statusText').textContent = 'Disconnected';
+                console.error('SSE connection error:', error);
+                
+                // Attempt reconnection after delay
+                setTimeout(() => {
+                    console.log('Attempting to reconnect...');
+                    connectSSE();
+                }, 3000);
             };
 
             // Handle comment events
@@ -395,26 +403,42 @@
                 eventCount++;
                 document.getElementById('eventCounter').textContent = `Events: ${eventCount}`;
                 loadComments();
-                showNotification('New comment added!');
+                showNotification('New comment added!', 'success');
             });
 
             eventSource.addEventListener('comment_updated', (e) => {
                 eventCount++;
                 document.getElementById('eventCounter').textContent = `Events: ${eventCount}`;
                 loadComments();
-                showNotification('Comment updated!');
+                showNotification('Comment updated!', 'info');
             });
 
             eventSource.addEventListener('comment_deleted', (e) => {
                 eventCount++;
                 document.getElementById('eventCounter').textContent = `Events: ${eventCount}`;
                 loadComments();
-                showNotification('Comment deleted!');
+                showNotification('Comment deleted!', 'warning');
             });
 
             // Handle heartbeat
             eventSource.addEventListener('ping', (e) => {
-                console.log('Received heartbeat');
+                console.log('Heartbeat received at', new Date().toISOString());
+            });
+
+            // Handle error events from server
+            eventSource.addEventListener('error', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data.message && data.message.includes('connection limit')) {
+                        showNotification('Server is at capacity. Retrying...', 'error');
+                        // Retry with exponential backoff
+                        setTimeout(() => connectSSE(), 5000);
+                    } else {
+                        showNotification('Connection error occurred', 'error');
+                    }
+                } catch (err) {
+                    console.error('Error parsing error event:', err);
+                }
             });
         }
 
@@ -486,10 +510,14 @@
 
                 if (response.ok) {
                     document.getElementById('content').value = '';
+                    showNotification('Comment posted successfully!', 'success');
+                } else {
+                    const error = await response.json();
+                    showNotification(`Failed: ${error.detail || 'Unknown error'}`, 'error');
                 }
             } catch (error) {
                 console.error('Failed to post comment:', error);
-                alert('Failed to post comment');
+                showNotification('Network error. Please try again.', 'error');
             }
         }
 
@@ -499,14 +527,21 @@
             if (!newContent) return;
 
             try {
-                await fetch(`${API_BASE}/comments/${commentId}`, {
+                const response = await fetch(`${API_BASE}/comments/${commentId}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ content: newContent })
                 });
+
+                if (response.ok) {
+                    showNotification('Comment updated successfully!', 'success');
+                } else {
+                    const error = await response.json();
+                    showNotification(`Failed: ${error.detail || 'Unknown error'}`, 'error');
+                }
             } catch (error) {
                 console.error('Failed to update comment:', error);
-                alert('Failed to update comment');
+                showNotification('Network error. Please try again.', 'error');
             }
         }
 
@@ -515,25 +550,44 @@
             if (!confirm('Delete this comment?')) return;
 
             try {
-                await fetch(`${API_BASE}/comments/${commentId}`, {
+                const response = await fetch(`${API_BASE}/comments/${commentId}`, {
                     method: 'DELETE'
                 });
+
+                if (response.ok) {
+                    showNotification('Comment deleted successfully!', 'success');
+                } else {
+                    const error = await response.json();
+                    showNotification(`Failed: ${error.detail || 'Unknown error'}`, 'error');
+                }
             } catch (error) {
                 console.error('Failed to delete comment:', error);
-                alert('Failed to delete comment');
+                showNotification('Network error. Please try again.', 'error');
             }
         }
 
         // Show notification
-        function showNotification(message) {
+        function showNotification(message, type = 'info') {
             const notification = document.createElement('div');
             notification.className = 'notification';
+            notification.style.borderLeft = `4px solid ${getNotificationColor(type)}`;
             notification.textContent = message;
             document.body.appendChild(notification);
 
             setTimeout(() => {
-                notification.remove();
+                notification.style.opacity = '0';
+                setTimeout(() => notification.remove(), 300);
             }, 3000);
+        }
+
+        function getNotificationColor(type) {
+            const colors = {
+                success: '#28a745',
+                info: '#17a2b8',
+                warning: '#ffc107',
+                error: '#dc3545'
+            };
+            return colors[type] || colors.info;
         }
 
         // Utility functions

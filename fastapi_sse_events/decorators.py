@@ -4,27 +4,29 @@ import asyncio
 import inspect
 import logging
 from functools import wraps
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, TypeVar, ParamSpec
 
-from fastapi import Request
+from fastapi import Request, HTTPException, status
 from sse_starlette.sse import EventSourceResponse
 
 from fastapi_sse_events.broker import EventBroker
 
 logger = logging.getLogger(__name__)
 
+P = ParamSpec('P')
+T = TypeVar('T')
 
-def sse_event(
+
+def publish_event(
     topic: Optional[str] = None,
     event: Optional[str] = None,
-    extract_data: Optional[Callable] = None,
+    extract_data: Optional[Callable[[Any], dict]] = None,
     auto_topic: bool = True,
-):
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
     """
     Decorator to automatically publish SSE events after endpoint execution.
     
-    This decorator wraps your endpoint function and automatically publishes
-    the result as an SSE event, eliminating the need for manual broker calls.
+    This is the PRIMARY method for publishing events - eliminates manual broker calls.
     
     Args:
         topic: Topic to publish to. If None, auto-inferred from route path
@@ -32,42 +34,51 @@ def sse_event(
         extract_data: Optional function to extract/transform event data from response
         auto_topic: If True and topic is None, auto-generate topic from route path
     
-    Example:
+    Examples:
         ```python
+        # Basic usage with explicit topic
         @app.post("/comments")
-        @sse_event(topic="comments", event="comment_created")
+        @publish_event(topic="comments", event="created")
         async def create_comment(comment: CommentCreate):
-            # Your logic here
-            return {"id": 1, "content": comment.content}
-            # Event automatically published to "comments" topic
-        ```
+            new_comment = save_comment(comment)
+            return new_comment
+            # Event automatically published!
         
-        With auto topic inference:
-        ```python
+        # Auto-infer topic from route
         @app.post("/threads/{thread_id}/comments")
-        @sse_event()  # Auto-infers topic: "threads.comments"
+        @publish_event()  # Topic: "threads.comments", Event: "create_comment"
         async def create_comment(thread_id: int, comment: CommentCreate):
             return {"id": 1, "thread_id": thread_id}
+        
+        # Custom data extraction
+        @app.put("/comments/{id}")
+        @publish_event(
+            topic="comments",
+            event="updated",
+            extract_data=lambda result: {"id": result["id"], "timestamp": result["updated_at"]}
+        )
+        async def update_comment(id: int, comment: CommentUpdate):
+            return update_comment_in_db(id, comment)
         ```
     """
-    def decorator(func: Callable) -> Callable:
+    def decorator(func: Callable[P, T]) -> Callable[P, T]:
         @wraps(func)
-        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+        async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
             # Execute original function
             result = await func(*args, **kwargs)
             
             # Get request and broker from args
             request = _extract_request_from_args(args, kwargs)
             if not request:
-                logger.warning(
-                    f"Could not find Request in {func.__name__} args. "
-                    "SSE event not published. Add Request parameter to your endpoint."
+                logger.debug(
+                    f"No Request parameter in {func.__name__}. "
+                    "SSE event not published. Add Request parameter to enable auto-publish."
                 )
                 return result
             
             broker = _get_broker_from_request(request)
             if not broker:
-                logger.warning(f"EventBroker not found in app state for {func.__name__}")
+                logger.debug(f"EventBroker not found in app state for {func.__name__}")
                 return result
             
             # Determine topic
@@ -85,24 +96,22 @@ def sse_event(
             
             # Ensure event_data is a dict
             if not isinstance(event_data, dict):
-                if hasattr(event_data, "dict"):
-                    event_data = event_data.dict()
-                elif hasattr(event_data, "model_dump"):
-                    event_data = event_data.model_dump()
-                else:
-                    event_data = {"data": event_data}
+                event_data = _convert_to_dict(event_data)
             
             # Publish event asynchronously (don't block response)
             try:
                 await broker.publish(event_topic, event_name, event_data)
-                logger.debug(f"Published SSE event: {event_name} to topic: {event_topic}")
+                logger.debug(f"Published event '{event_name}' to topic '{event_topic}'")
+            except ValueError as e:
+                # Message too large
+                logger.error(f"Failed to publish event (message too large): {e}")
             except Exception as e:
                 logger.error(f"Failed to publish SSE event: {e}")
             
             return result
         
         @wraps(func)
-        def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+        def sync_wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
             # Execute original function
             result = func(*args, **kwargs)
             
@@ -127,12 +136,7 @@ def sse_event(
             # Extract event data
             event_data = extract_data(result) if extract_data else result
             if not isinstance(event_data, dict):
-                if hasattr(event_data, "dict"):
-                    event_data = event_data.dict()
-                elif hasattr(event_data, "model_dump"):
-                    event_data = event_data.model_dump()
-                else:
-                    event_data = {"data": event_data}
+                event_data = _convert_to_dict(event_data)
             
             # Publish event (create task for async publish)
             try:
@@ -144,63 +148,59 @@ def sse_event(
         
         # Return appropriate wrapper based on function type
         if asyncio.iscoroutinefunction(func):
-            return async_wrapper
+            return async_wrapper  # type: ignore
         else:
-            return sync_wrapper
+            return sync_wrapper  # type: ignore
     
     return decorator
 
 
-def sse_endpoint(
+def subscribe_to_events(
     topics: Optional[list[str]] = None,
-    authorize: Optional[Callable] = None,
-    heartbeat: int = 30,
-):
+    authorize: Optional[Callable[[Request, str], bool]] = None,
+) -> Callable[[Callable[..., Any]], Callable[..., EventSourceResponse]]:
     """
     Decorator to create SSE streaming endpoint.
     
-    This decorator automatically handles SSE connection setup, topic subscription,
-    and event streaming, eliminating boilerplate code.
+    This is the PRIMARY method for creating SSE endpoints - eliminates boilerplate.
     
     Args:
         topics: List of topics to subscribe to. If None, uses 'topic' query param
         authorize: Optional authorization function (request, topic) -> bool
-        heartbeat: Heartbeat interval in seconds (0 to disable)
     
-    Example:
+    Examples:
         ```python
-        # Simple SSE endpoint subscribing to specific topics
+        # Simple SSE endpoint with specific topics
         @app.get("/events")
-        @sse_endpoint(topics=["comments", "users"])
-        async def events(request: Request):
-            pass  # Decorator handles everything
+        @subscribe_to_events(topics=["comments", "users"])
+        async def events_endpoint(request: Request):
+            pass  # Decorator handles everything!
         
-        # With dynamic topics from query params
+        # Dynamic topics from query params: /events?topic=comments,users
         @app.get("/events")
-        @sse_endpoint()  # Topics from ?topic=comments,users
-        async def events(request: Request):
+        @subscribe_to_events()
+        async def events_endpoint(request: Request):
             pass
         
         # With authorization
         async def check_auth(request: Request, topic: str) -> bool:
-            # Check if user can access topic
-            return True
+            user_id = request.state.user_id  # From auth middleware
+            return can_access_topic(user_id, topic)
         
         @app.get("/events")
-        @sse_endpoint(authorize=check_auth)
-        async def events(request: Request):
+        @subscribe_to_events(authorize=check_auth)
+        async def events_endpoint(request: Request):
             pass
         ```
     """
-    def decorator(func: Callable) -> Callable:
+    def decorator(func: Callable[..., Any]) -> Callable[..., EventSourceResponse]:
         @wraps(func)
-        async def wrapper(request: Request) -> EventSourceResponse:
+        async def wrapper(request: Request, **kwargs: Any) -> EventSourceResponse:
             broker = _get_broker_from_request(request)
             if not broker:
-                from fastapi import HTTPException, status
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="EventBroker not configured. Use SSEApp or mount_sse()."
+                    detail="EventBroker not configured. Use mount_sse() to configure.",
                 )
             
             # Determine topics to subscribe
@@ -212,46 +212,88 @@ def sse_endpoint(
                     subscribe_topics = [t.strip() for t in topic_param.split(",") if t.strip()]
             
             if not subscribe_topics:
-                from fastapi import HTTPException, status
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="No topics specified. Provide topics in decorator or as ?topic= query param."
+                    detail="No topics specified. Provide topics in decorator or ?topic= query param.",
                 )
             
-            # Authorization check
+            # Authorization check (parallelized)
             if authorize:
-                for topic_name in subscribe_topics:
-                    try:
-                        authorized = await authorize(request, topic_name)
-                        if not authorized:
-                            from fastapi import HTTPException, status
+                try:
+                    auth_results = await asyncio.gather(
+                        *[authorize(request, topic_name) for topic_name in subscribe_topics],
+                        return_exceptions=True
+                    )
+                    
+                    for topic_name, result in zip(subscribe_topics, auth_results):
+                        if isinstance(result, Exception):
+                            logger.error(f"Authorization failed for {topic_name}: {result}")
+                            raise HTTPException(
+                                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                                detail="Authorization check failed"
+                            )
+                        if not result:
                             raise HTTPException(
                                 status_code=status.HTTP_403_FORBIDDEN,
                                 detail=f"Not authorized to access topic: {topic_name}"
                             )
-                    except Exception as e:
-                        logger.error(f"Authorization failed: {e}")
-                        from fastapi import HTTPException, status
-                        raise HTTPException(
-                            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                            detail="Authorization check failed"
-                        )
+                except HTTPException:
+                    raise
+                except Exception as e:
+                    logger.error(f"Authorization error: {e}")
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="Authorization failed"
+                    )
             
             # Create event generator
             async def event_generator():
-                async for message in broker.subscribe(subscribe_topics):
-                    yield message
+                try:
+                    async for message in broker.subscribe(subscribe_topics):
+                        if await request.is_disconnected():
+                            logger.info(f"Client disconnected from topics: {subscribe_topics}")
+                            break
+                        yield message
+                except RuntimeError as e:
+                    if "Maximum concurrent connections exceeded" in str(e):
+                        logger.warning("Connection limit reached")
+                        yield f"event: error\ndata: {{'message': 'Connection limit reached'}}\n\n"
+                    else:
+                        raise
+                except Exception as e:
+                    logger.error(f"Stream error: {e}")
+                    yield f"event: error\ndata: {{'message': 'Stream error'}}\n\n"
             
             # Return SSE response
             return EventSourceResponse(
                 event_generator(),
-                ping=heartbeat if heartbeat > 0 else None,
-                ping_message_factory=lambda: "ping" if heartbeat > 0 else None,
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "X-Accel-Buffering": "no",
+                },
             )
         
         return wrapper
     
     return decorator
+
+
+# Legacy alias for backward compatibility
+sse_endpoint = subscribe_to_events
+sse_event = publish_event
+
+
+def _convert_to_dict(obj: Any) -> dict:
+    """Convert object to dictionary."""
+    if hasattr(obj, "model_dump"):
+        return obj.model_dump()
+    elif hasattr(obj, "dict"):
+        return obj.dict()
+    elif isinstance(obj, dict):
+        return obj
+    else:
+        return {"data": obj}
 
 
 def _extract_request_from_args(args: tuple, kwargs: dict) -> Optional[Request]:
@@ -270,6 +312,9 @@ def _extract_request_from_args(args: tuple, kwargs: dict) -> Optional[Request]:
 
 def _get_broker_from_request(request: Request) -> Optional[EventBroker]:
     """Get EventBroker from app state."""
+    if hasattr(request.app, "state") and hasattr(request.app.state, "event_broker"):
+        return request.app.state.event_broker
+    # Legacy fallback
     if hasattr(request.app, "state") and hasattr(request.app.state, "broker"):
         return request.app.state.broker
     return None

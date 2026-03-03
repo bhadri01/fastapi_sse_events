@@ -3,12 +3,12 @@ CRM Comment System Example with Real-time SSE Updates.
 
 This example demonstrates a FastAPI application with:
 - REST API for comment CRUD operations
-- Server-Sent Events for real-time updates
+- Server-Sent Events for real-time updates (decorator-based)
 - Authorization for topic access
 - Multi-client synchronization via Redis Pub/Sub
 
 Run with: uvicorn app:app --reload
-Then open b in multiple browsers to see real-time updates.
+Then open client.html in multiple browsers to see real-time updates.
 """
 
 import logging
@@ -21,7 +21,13 @@ from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from fastapi_sse_events import mount_sse, RealtimeConfig, TopicBuilder
+from fastapi_sse_events import (
+    mount_sse,
+    RealtimeConfig,
+    TopicBuilder,
+    publish_event,
+    subscribe_to_events,
+)
 
 # Load environment variables from .env file
 load_dotenv()
@@ -111,8 +117,11 @@ config = RealtimeConfig(
     redis_url=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
     heartbeat_seconds=int(os.getenv("SSE_HEARTBEAT_SECONDS", "15")),
     sse_path=os.getenv("SSE_PATH", "/events"),
+    max_connections=int(os.getenv("SSE_MAX_CONNECTIONS", "1000")),
+    max_queue_size=int(os.getenv("SSE_MAX_QUEUE_SIZE", "100")),
+    max_message_size=int(os.getenv("SSE_MAX_MESSAGE_SIZE", "65536")),
 )
-broker = mount_sse(app, config=config, authorize=authorize_topic)
+mount_sse(app, config=config, authorize=authorize_topic)
 
 # Topic builder helper
 topics = TopicBuilder()
@@ -164,8 +173,17 @@ async def get_thread_comments(thread_id: int):
 
 
 @app.post("/threads/{thread_id}/comments", response_model=Comment, tags=["Comments"])
-async def create_comment(thread_id: int, comment: CommentCreate):
-    """Create a new comment and notify subscribers."""
+@publish_event(
+    event="comment_created",
+    extract_data=lambda result: {
+        "comment_id": result.id,
+        "thread_id": result.thread_id,
+        "author": result.author,
+        "timestamp": result.created_at,
+    }
+)
+async def create_comment(request: Request, thread_id: int, comment: CommentCreate):
+    """Create a new comment and notify subscribers via SSE (automatic via decorator)."""
     global comment_id_counter
 
     if thread_id not in threads_db:
@@ -192,26 +210,23 @@ async def create_comment(thread_id: int, comment: CommentCreate):
     comments_db[comment_id] = new_comment
     threads_db[thread_id].append(comment_id)
 
-    # Publish SSE event
-    await broker.publish(
-        topic=topics.comment_thread(thread_id),
-        event="comment_created",
-        data={
-            "comment_id": comment_id,
-            "thread_id": thread_id,
-            "author": comment.author,
-            "timestamp": now,
-        },
-    )
-
     logger.info(f"Comment {comment_id} created in thread {thread_id}")
 
+    # Return comment (decorator automatically publishes SSE event)
     return Comment(**new_comment)
 
 
 @app.put("/comments/{comment_id}", response_model=Comment, tags=["Comments"])
-async def update_comment(comment_id: str, comment_update: CommentUpdate):
-    """Update a comment and notify subscribers."""
+@publish_event(
+    event="comment_updated",
+    extract_data=lambda result: {
+        "comment_id": result.id,
+        "thread_id": result.thread_id,
+        "timestamp": result.updated_at,
+    }
+)
+async def update_comment(request: Request, comment_id: str, comment_update: CommentUpdate):
+    """Update a comment and notify subscribers via SSE (automatic via decorator)."""
     if comment_id not in comments_db:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -223,25 +238,23 @@ async def update_comment(comment_id: str, comment_update: CommentUpdate):
     comment_data["content"] = comment_update.content
     comment_data["updated_at"] = datetime.utcnow().isoformat()
 
-    # Publish SSE event
-    await broker.publish(
-        topic=topics.comment_thread(comment_data["thread_id"]),
-        event="comment_updated",
-        data={
-            "comment_id": comment_id,
-            "thread_id": comment_data["thread_id"],
-            "timestamp": comment_data["updated_at"],
-        },
-    )
-
     logger.info(f"Comment {comment_id} updated")
 
+    # Return comment (decorator automatically publishes SSE event)
     return Comment(**comment_data)
 
 
 @app.delete("/comments/{comment_id}", tags=["Comments"])
-async def delete_comment(comment_id: str):
-    """Delete a comment and notify subscribers."""
+@publish_event(
+    event="comment_deleted",
+    extract_data=lambda result: {
+        "comment_id": result["comment_id"],
+        "thread_id": result["thread_id"],
+        "timestamp": result["timestamp"],
+    }
+)
+async def delete_comment(request: Request, comment_id: str):
+    """Delete a comment and notify subscribers via SSE (automatic via decorator)."""
     if comment_id not in comments_db:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -256,20 +269,15 @@ async def delete_comment(comment_id: str):
     del comments_db[comment_id]
     threads_db[thread_id].remove(comment_id)
 
-    # Publish SSE event
-    await broker.publish(
-        topic=topics.comment_thread(thread_id),
-        event="comment_deleted",
-        data={
-            "comment_id": comment_id,
-            "thread_id": thread_id,
-            "timestamp": datetime.utcnow().isoformat(),
-        },
-    )
-
     logger.info(f"Comment {comment_id} deleted")
 
-    return {"message": f"Comment {comment_id} deleted", "comment_id": comment_id}
+    # Return response (decorator automatically publishes SSE event)
+    return {
+        "message": f"Comment {comment_id} deleted",
+        "comment_id": comment_id,
+        "thread_id": thread_id,
+        "timestamp": datetime.utcnow().isoformat(),
+    }
 
 
 @app.get("/health", tags=["Health"])

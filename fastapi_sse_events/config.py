@@ -13,6 +13,10 @@ class RealtimeConfig(BaseSettings):
         heartbeat_seconds: Interval between heartbeat/ping events to keep connections alive
         sse_path: HTTP path where the SSE endpoint will be mounted
         topic_prefix: Optional prefix for all topic names (useful for multi-tenancy)
+        max_connections: Maximum concurrent SSE connections allowed
+        max_queue_size: Maximum messages queued per client (prevents memory bloat)
+        max_message_size: Maximum message size in bytes (prevents large message attacks)
+        rate_limit_per_second: Rate limit for publish operations per second (0 = unlimited)
     """
 
     redis_url: str = Field(
@@ -32,6 +36,28 @@ class RealtimeConfig(BaseSettings):
     topic_prefix: str = Field(
         default="",
         description="Optional prefix for all topic names",
+    )
+    max_connections: int = Field(
+        default=1000,
+        ge=1,
+        description="Maximum concurrent SSE connections",
+    )
+    max_queue_size: int = Field(
+        default=100,
+        ge=10,
+        le=1000,
+        description="Maximum queued messages per client",
+    )
+    max_message_size: int = Field(
+        default=65536,  # 64 KB
+        ge=1024,
+        le=1048576,  # 1 MB
+        description="Maximum message size in bytes",
+    )
+    rate_limit_per_second: int = Field(
+        default=0,
+        ge=0,
+        description="Rate limit for publish operations (0 = unlimited)",
     )
 
     def get_topic(self, topic: str) -> str:

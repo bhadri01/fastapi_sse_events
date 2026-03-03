@@ -1,0 +1,40 @@
+# Prometheus configuration for monitoring SSE system
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'sse-production'
+
+# Scrape FastAPI instances
+scrape_configs:
+  - job_name: 'fastapi-sse'
+    static_configs:
+      - targets:
+        - fastapi-1:8000
+        - fastapi-2:8000
+        - fastapi-3:8000
+        - fastapi-4:8000
+        - fastapi-5:8000
+        - fastapi-6:8000
+        - fastapi-7:8000
+        - fastapi-8:8000
+        - fastapi-9:8000
+        - fastapi-10:8000
+    metrics_path: '/metrics/prometheus'
+    scrape_interval: 10s
+
+  # Nginx metrics (if nginx-prometheus-exporter is installed)
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx:9113']
+
+# Alerting rules
+rule_files:
+  - 'alerts.yml'
+
+# Alertmanager configuration (optional)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']

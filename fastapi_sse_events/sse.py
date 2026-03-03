@@ -1,5 +1,6 @@
 """SSE endpoint handler for FastAPI."""
 
+import asyncio
 import logging
 from typing import Callable
 
@@ -67,12 +68,24 @@ def create_sse_endpoint(
                 detail="At least one topic is required",
             )
 
-        # Authorization check for each topic
+        # Authorization check for each topic (parallelized)
         if authorize_fn:
-            for topic_name in topics:
-                try:
-                    authorized = await authorize_fn(request, topic_name)
-                    if not authorized:
+            try:
+                # Run all authorization checks in parallel
+                auth_results = await asyncio.gather(
+                    *[authorize_fn(request, topic_name) for topic_name in topics],
+                    return_exceptions=True
+                )
+                
+                # Check results
+                for topic_name, result in zip(topics, auth_results):
+                    if isinstance(result, Exception):
+                        logger.error("Authorization check failed for %s: %s", topic_name, result)
+                        raise HTTPException(
+                            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail="Authorization check failed",
+                        )
+                    if not result:
                         logger.warning(
                             "Unauthorized topic access attempt: %s from %s",
                             topic_name,
@@ -82,14 +95,14 @@ def create_sse_endpoint(
                             status_code=status.HTTP_403_FORBIDDEN,
                             detail=f"Not authorized to access topic: {topic_name}",
                         )
-                except HTTPException:
-                    raise
-                except Exception as e:
-                    logger.error("Authorization check failed: %s", e)
-                    raise HTTPException(
-                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail="Authorization check failed",
-                    )
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error("Authorization error: %s", e)
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Authorization failed",
+                )
 
         logger.info(
             "SSE connection established for topics: %s from %s",
@@ -108,9 +121,15 @@ def create_sse_endpoint(
 
                     yield sse_message
 
+            except RuntimeError as e:
+                if "Maximum concurrent connections exceeded" in str(e):
+                    logger.warning("Connection limit reached for topics: %s", topics)
+                    yield f"event: error\ndata: {{'message': 'Server connection limit reached. Try again later.'}}\n\n"
+                else:
+                    logger.error("Runtime error in SSE stream: %s", e)
+                    yield f"event: error\ndata: {{'message': 'Stream error'}}\n\n"
             except Exception as e:
                 logger.error("Error in SSE event stream: %s", e)
-                # Send error event to client before closing
                 yield f"event: error\ndata: {{'message': 'Stream error'}}\n\n"
 
             finally:

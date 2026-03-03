@@ -1,0 +1,195 @@
+version: '3.8'
+
+services:
+  # Redis Cluster - 3 nodes for high availability
+  redis-1:
+    image: redis:7-alpine
+    command: >
+      redis-server
+      --port 7001
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+      --maxmemory 2gb
+      --maxmemory-policy allkeys-lru
+    ports:
+      - "7001:7001"
+    volumes:
+      - redis-1-data:/data
+    networks:
+      - sse-network
+
+  redis-2:
+    image: redis:7-alpine
+    command: >
+      redis-server
+      --port 7002
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+      --maxmemory 2gb
+      --maxmemory-policy allkeys-lru
+    ports:
+      - "7002:7002"
+    volumes:
+      - redis-2-data:/data
+    networks:
+      - sse-network
+
+  redis-3:
+    image: redis:7-alpine
+    command: >
+      redis-server
+      --port 7003
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --appendonly yes
+      --maxmemory 2gb
+      --maxmemory-policy allkeys-lru
+    ports:
+      - "7003:7003"
+    volumes:
+      - redis-3-data:/data
+    networks:
+      - sse-network
+
+  # Initialize Redis Cluster
+  redis-cluster-init:
+    image: redis:7-alpine
+    depends_on:
+      - redis-1
+      - redis-2
+      - redis-3
+    command: >
+      sh -c "sleep 5 &&
+      redis-cli --cluster create
+      redis-1:7001 redis-2:7002 redis-3:7003
+      --cluster-replicas 0 --cluster-yes"
+    networks:
+      - sse-network
+
+  # FastAPI Instances (10 for 100K users)
+  fastapi-1:
+    build: .
+    environment:
+      - SSE_REDIS_URL=redis://redis-1:7001,redis-2:7002,redis-3:7003/0
+      - SSE_MAX_CONNECTIONS=10000
+      - SSE_MAX_QUEUE_SIZE=50
+      - SSE_MAX_MESSAGE_SIZE=32768
+      - SSE_HEARTBEAT_SECONDS=30
+      - LOG_LEVEL=WARNING
+    depends_on:
+      - redis-cluster-init
+    networks:
+      - sse-network
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+
+  fastapi-2:
+    build: .
+    environment:
+      - SSE_REDIS_URL=redis://redis-1:7001,redis-2:7002,redis-3:7003/0
+      - SSE_MAX_CONNECTIONS=10000
+      - SSE_MAX_QUEUE_SIZE=50
+      - SSE_MAX_MESSAGE_SIZE=32768
+    depends_on:
+      - redis-cluster-init
+    networks:
+      - sse-network
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+
+  fastapi-3:
+    build: .
+    environment:
+      - SSE_REDIS_URL=redis://redis-1:7001,redis-2:7002,redis-3:7003/0
+      - SSE_MAX_CONNECTIONS=10000
+      - SSE_MAX_QUEUE_SIZE=50
+    depends_on:
+      - redis-cluster-init
+    networks:
+      - sse-network
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+
+  # Add fastapi-4 through fastapi-10 with same config...
+  # (abbreviated for space - replicate fastapi-3 config)
+
+  # Nginx Load Balancer
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./ssl:/etc/ssl  # Mount SSL certificates
+    depends_on:
+      - fastapi-1
+      - fastapi-2
+      - fastapi-3
+    networks:
+      - sse-network
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+
+  # Prometheus for Metrics
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+    networks:
+      - sse-network
+
+  # Grafana for Dashboards
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=redis-datasource
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana-dashboards:/etc/grafana/provisioning/dashboards
+    depends_on:
+      - prometheus
+    networks:
+      - sse-network
+
+networks:
+  sse-network:
+    driver: bridge
+
+volumes:
+  redis-1-data:
+  redis-2-data:
+  redis-3-data:
+  prometheus-data:
+  grafana-data:

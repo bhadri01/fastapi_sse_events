@@ -1,0 +1,4 @@
+# Load Testing Requirements
+# Install with: pip install -r load_test_requirements.txt
+
+aiohttp>=3.9.0
