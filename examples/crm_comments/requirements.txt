@@ -1,0 +1,14 @@
+# Requirements for CRM Comments Example
+# Install with: pip install -r requirements.txt
+
+# Core dependencies (automatically installed with fastapi-sse-events)
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+redis[asyncio]>=5.0.0
+sse-starlette>=2.0.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+python-dotenv>=1.0.0
+
+# Install the main package in development mode
+# Run from project root: pip install -e .

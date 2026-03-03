@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRM Comments - Real-time Updates</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header .subtitle {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .status {
+            padding: 15px 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #6c757d;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.connected {
+            background: #28a745;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .thread-selector {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .thread-selector label {
+            font-weight: 600;
+            margin-right: 10px;
+        }
+
+        .thread-selector select {
+            padding: 8px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .comments-section {
+            padding: 30px;
+            min-height: 400px;
+        }
+
+        .comment {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border-left: 3px solid #667eea;
+            transition: all 0.3s ease;
+        }
+
+        .comment.new-comment {
+            animation: slideIn 0.5s ease;
+            background: #e7f3ff;
+            border-left-color: #28a745;
+        }
+
+        .comment.updated-comment {
+            animation: highlight 0.5s ease;
+            background: #fff3cd;
+            border-left-color: #ffc107;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes highlight {
+
+            0%,
+            100% {
+                background: #f8f9fa;
+            }
+
+            50% {
+                background: #fff3cd;
+            }
+        }
+
+        .comment-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .comment-author {
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .comment-time {
+            font-size: 12px;
+            color: #6c757d;
+        }
+
+        .comment-content {
+            color: #212529;
+            line-height: 1.5;
+        }
+
+        .comment-actions {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .comment-actions button {
+            padding: 4px 12px;
+            font-size: 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-edit {
+            background: #007bff;
+            color: white;
+        }
+
+        .btn-edit:hover {
+            background: #0056b3;
+        }
+
+        .btn-delete {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-delete:hover {
+            background: #c82333;
+        }
+
+        .comment-form {
+            padding: 30px;
+            background: #f8f9fa;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .btn-submit {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .btn-submit:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn-submit:active {
+            transform: translateY(0);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+
+        .empty-state svg {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            animation: slideInRight 0.3s ease;
+            z-index: 1000;
+        }
+
+        @keyframes slideInRight {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🗨️ CRM Comment System</h1>
+            <div class="subtitle">Real-time updates with Server-Sent Events</div>
+        </div>
+
+        <div class="status">
+            <div class="status-indicator">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Disconnected</span>
+            </div>
+            <div>
+                <small id="eventCounter">Events: 0</small>
+            </div>
+        </div>
+
+        <div class="thread-selector">
+            <label for="threadSelect">Thread:</label>
+            <select id="threadSelect">
+                <option value="1">Thread 1</option>
+                <option value="2">Thread 2</option>
+                <option value="3">Thread 3</option>
+            </select>
+        </div>
+
+        <div class="comments-section" id="commentsSection">
+            <div class="empty-state">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" />
+                </svg>
+                <p>No comments yet. Be the first to comment!</p>
+            </div>
+        </div>
+
+        <div class="comment-form">
+            <form id="commentForm">
+                <div class="form-group">
+                    <label for="author">Your Name</label>
+                    <input type="text" id="author" name="author" required placeholder="Enter your name">
+                </div>
+                <div class="form-group">
+                    <label for="content">Comment</label>
+                    <textarea id="content" name="content" required placeholder="Write your comment..."></textarea>
+                </div>
+                <button type="submit" class="btn-submit">Post Comment</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        let eventSource = null;
+        let currentThreadId = 1;
+        let eventCount = 0;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadComments();
+            connectSSE();
+
+            // Thread selector
+            document.getElementById('threadSelect').addEventListener('change', (e) => {
+                currentThreadId = parseInt(e.target.value);
+                loadComments();
+                reconnectSSE();
+            });
+
+            // Comment form
+            document.getElementById('commentForm').addEventListener('submit', handleSubmit);
+        });
+
+        // Connect to SSE stream
+        function connectSSE() {
+            if (eventSource) {
+                eventSource.close();
+            }
+
+            const topic = `comment_thread:${currentThreadId}`;
+            eventSource = new EventSource(`${API_BASE}/events?topic=${topic}`);
+
+            eventSource.onopen = () => {
+                document.getElementById('statusDot').classList.add('connected');
+                document.getElementById('statusText').textContent = 'Connected';
+            };
+
+            eventSource.onerror = () => {
+                document.getElementById('statusDot').classList.remove('connected');
+                document.getElementById('statusText').textContent = 'Disconnected';
+            };
+
+            // Handle comment events
+            eventSource.addEventListener('comment_created', (e) => {
+                eventCount++;
+                document.getElementById('eventCounter').textContent = `Events: ${eventCount}`;
+                loadComments();
+                showNotification('New comment added!');
+            });
+
+            eventSource.addEventListener('comment_updated', (e) => {
+                eventCount++;
+                document.getElementById('eventCounter').textContent = `Events: ${eventCount}`;
+                loadComments();
+                showNotification('Comment updated!');
+            });
+
+            eventSource.addEventListener('comment_deleted', (e) => {
+                eventCount++;
+                document.getElementById('eventCounter').textContent = `Events: ${eventCount}`;
+                loadComments();
+                showNotification('Comment deleted!');
+            });
+
+            // Handle heartbeat
+            eventSource.addEventListener('ping', (e) => {
+                console.log('Received heartbeat');
+            });
+        }
+
+        function reconnectSSE() {
+            eventCount = 0;
+            document.getElementById('eventCounter').textContent = 'Events: 0';
+            connectSSE();
+        }
+
+        // Load comments via REST
+        async function loadComments() {
+            try {
+                const response = await fetch(`${API_BASE}/threads/${currentThreadId}/comments`);
+                const data = await response.json();
+                renderComments(data.comments);
+            } catch (error) {
+                console.error('Failed to load comments:', error);
+            }
+        }
+
+        // Render comments
+        function renderComments(comments) {
+            const section = document.getElementById('commentsSection');
+
+            if (comments.length === 0) {
+                section.innerHTML = `
+                    <div class="empty-state">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+                        </svg>
+                        <p>No comments yet. Be the first to comment!</p>
+                    </div>
+                `;
+                return;
+            }
+
+            section.innerHTML = comments.map(comment => `
+                <div class="comment" data-id="${comment.id}">
+                    <div class="comment-header">
+                        <span class="comment-author">${escapeHtml(comment.author)}</span>
+                        <span class="comment-time">${formatTime(comment.created_at)}</span>
+                    </div>
+                    <div class="comment-content">${escapeHtml(comment.content)}</div>
+                    <div class="comment-actions">
+                        <button class="btn-edit" onclick="editComment('${comment.id}')">Edit</button>
+                        <button class="btn-delete" onclick="deleteComment('${comment.id}')">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Handle form submission
+        async function handleSubmit(e) {
+            e.preventDefault();
+
+            const author = document.getElementById('author').value;
+            const content = document.getElementById('content').value;
+
+            try {
+                const response = await fetch(`${API_BASE}/threads/${currentThreadId}/comments`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        thread_id: currentThreadId,
+                        author,
+                        content
+                    })
+                });
+
+                if (response.ok) {
+                    document.getElementById('content').value = '';
+                }
+            } catch (error) {
+                console.error('Failed to post comment:', error);
+                alert('Failed to post comment');
+            }
+        }
+
+        // Edit comment
+        async function editComment(commentId) {
+            const newContent = prompt('Edit comment:');
+            if (!newContent) return;
+
+            try {
+                await fetch(`${API_BASE}/comments/${commentId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: newContent })
+                });
+            } catch (error) {
+                console.error('Failed to update comment:', error);
+                alert('Failed to update comment');
+            }
+        }
+
+        // Delete comment
+        async function deleteComment(commentId) {
+            if (!confirm('Delete this comment?')) return;
+
+            try {
+                await fetch(`${API_BASE}/comments/${commentId}`, {
+                    method: 'DELETE'
+                });
+            } catch (error) {
+                console.error('Failed to delete comment:', error);
+                alert('Failed to delete comment');
+            }
+        }
+
+        // Show notification
+        function showNotification(message) {
+            const notification = document.createElement('div');
+            notification.className = 'notification';
+            notification.textContent = message;
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                notification.remove();
+            }, 3000);
+        }
+
+        // Utility functions
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatTime(isoString) {
+            const date = new Date(isoString);
+            return date.toLocaleString();
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (eventSource) {
+                eventSource.close();
+            }
+        });
+    </script>
+</body>
+
+</html>

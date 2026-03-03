@@ -1,0 +1,2471 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FastAPI SSE Events - Documentation</title>
+    <meta name="description"
+        content="Server-Sent Events (SSE) notifications for FastAPI using Redis Pub/Sub. Add real-time updates to your REST API.">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="styles.css">
+
+    <!-- Prism.js for Syntax Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="header-container">
+            <div class="header-left">
+                <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle menu">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+                <a href="#" class="logo">
+                    <i class="fas fa-bolt"></i>
+                    FastAPI SSE Events
+                </a>
+                <nav class="header-nav">
+                    <a href="#getting-started">Docs</a>
+                    <a href="#examples">Examples</a>
+                    <a href="#api-reference">API</a>
+                    <a href="https://github.com/yourusername/fastapi-sse-events" target="_blank">GitHub</a>
+                </nav>
+            </div>
+            <div class="header-right">
+                <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+                    <i class="fas fa-moon"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="layout-wrapper">
+
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-content">
+                <div class="sidebar-search">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="searchInput" placeholder="Search documentation..." />
+                </div>
+
+                <nav class="sidebar-nav">
+                    <div class="nav-section">
+                        <h3>Getting Started</h3>
+                        <ul>
+                            <li><a href="#overview"><i class="fas fa-home"></i> Overview</a></li>
+                            <li><a href="#why-sse"><i class="fas fa-question-circle"></i> Why SSE?</a></li>
+                            <li><a href="#installation"><i class="fas fa-download"></i> Installation</a></li>
+                            <li><a href="#quick-start"><i class="fas fa-rocket"></i> Quick Start</a></li>
+                            <li><a href="#simplified-api"><i class="fas fa-magic"></i> Simplified API</a></li>
+                        </ul>
+                    </div>
+
+                    <div class="nav-section">
+                        <h3>Core Concepts</h3>
+                        <ul>
+                            <li><a href="#architecture"><i class="fas fa-sitemap"></i> Architecture</a></li>
+                            <li><a href="#features"><i class="fas fa-star"></i> Features</a></li>
+                            <li><a href="#how-it-works"><i class="fas fa-cogs"></i> How It Works</a></li>
+                        </ul>
+                    </div>
+
+                    <div class="nav-section">
+                        <h3>Usage Guide</h3>
+                        <ul>
+                            <li><a href="#basic-integration"><i class="fas fa-plug"></i> Basic Integration</a></li>
+                            <li><a href="#publishing-events"><i class="fas fa-paper-plane"></i> Publishing Events</a>
+                            </li>
+                            <li><a href="#authorization"><i class="fas fa-lock"></i> Authorization</a></li>
+                            <li><a href="#topic-patterns"><i class="fas fa-tags"></i> Topic Patterns</a></li>
+                            <li><a href="#configuration"><i class="fas fa-sliders-h"></i> Configuration</a></li>
+                        </ul>
+                    </div>
+
+                    <div class="nav-section">
+                        <h3>Client Integration</h3>
+                        <ul>
+                            <li><a href="#javascript-client"><i class="fab fa-js"></i> JavaScript</a></li>
+                            <li><a href="#react-client"><i class="fab fa-react"></i> React</a></li>
+                            <li><a href="#python-client"><i class="fab fa-python"></i> Python</a></li>
+                        </ul>
+                    </div>
+
+                    <div class="nav-section">
+                        <h3>Deployment</h3>
+                        <ul>
+                            <li><a href="#production-setup"><i class="fas fa-server"></i> Production Setup</a></li>
+                            <li><a href="#nginx-config"><i class="fas fa-network-wired"></i> Nginx</a></li>
+                            <li><a href="#docker"><i class="fab fa-docker"></i> Docker</a></li>
+                            <li><a href="#performance"><i class="fas fa-tachometer-alt"></i> Performance</a></li>
+                        </ul>
+                    </div>
+
+                    <div class="nav-section">
+                        <h3>Reference</h3>
+                        <ul>
+                            <li><a href="#api-reference"><i class="fas fa-code"></i> API Reference</a></li>
+                            <li><a href="#examples"><i class="fas fa-book"></i> Examples</a></li>
+                            <li><a href="#troubleshooting"><i class="fas fa-bug"></i> Troubleshooting</a></li>
+                        </ul>
+                    </div>
+                </nav>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main">
+            <div class="content-container">
+
+                <!-- Hero Section -->
+                <section class="hero">
+                    <div class="hero-badge">
+                        <i class="fas fa-bolt"></i>
+                        <span>v0.1.0</span>
+                    </div>
+                    <h1 class="hero-title">FastAPI SSE Events</h1>
+                    <p class="hero-subtitle">
+                        Add real-time "refresh-less" updates to your FastAPI REST API using Server-Sent Events (SSE) and
+                        Redis Pub/Sub. Perfect for collaborative tools and dashboards.
+                    </p>
+                    <div class="hero-actions">
+                        <a href="#quick-start" class="btn btn-primary">
+                            <i class="fas fa-rocket"></i>
+                            Get Started
+                        </a>
+                        <a href="https://github.com/yourusername/fastapi-sse-events" class="btn btn-secondary">
+                            <i class="fab fa-github"></i>
+                            View on GitHub
+                        </a>
+                    </div>
+                    <div class="hero-features">
+                        <div class="hero-feature">
+                            <i class="fas fa-check-circle"></i>
+                            <span>Simple Integration</span>
+                        </div>
+                        <div class="hero-feature">
+                            <i class="fas fa-check-circle"></i>
+                            <span>Type Safe</span>
+                        </div>
+                        <div class="hero-feature">
+                            <i class="fas fa-check-circle"></i>
+                            <span>Redis Backed</span>
+                        </div>
+                        <div class="hero-feature">
+                            <i class="fas fa-check-circle"></i>
+                            <span>Horizontally Scalable</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Overview -->
+                <section id="overview" class="section">
+                    <h2 class="section-title">
+                        <i class="fas fa-home"></i>
+                        Overview
+                    </h2>
+                    <p>
+                        <strong>FastAPI SSE Events</strong> enables near real-time notifications for REST-based
+                        applications without the complexity of WebSockets. Clients subscribe to Server-Sent Event
+                        streams for specific topics, receive lightweight notifications when data changes, then refresh
+                        data via existing REST endpoints.
+                    </p>
+
+                    <div class="info-card">
+                        <h4><i class="fas fa-lightbulb"></i> Perfect For</h4>
+                        <ul>
+                            <li>Collaborative CRM systems where sales reps see updates from teammates</li>
+                            <li>Project management tools with real-time task updates</li>
+                            <li>Live dashboards showing metrics and notifications</li>
+                            <li>Multi-user editing interfaces requiring change notifications</li>
+                        </ul>
+                    </div>
+                </section>
+
+                <!-- Why SSE? -->
+                <section id="why-sse" class="section">
+                    <h2 class="section-title">
+                        <i class="fas fa-question-circle"></i>
+                        Why SSE?
+                    </h2>
+
+                    <h3 class="subsection-title">The Problem</h3>
+                    <p>
+                        Traditional REST APIs require manual refresh to see updates from other users. This creates poor
+                        collaboration experiences and inefficient workflows. Users constantly hit refresh or polling
+                        adds unnecessary server load.
+                    </p>
+
+                    <h3 class="subsection-title">Why Not WebSockets?</h3>
+                    <p>WebSockets are powerful but come with complexity:</p>
+                    <ul>
+                        <li>Require separate infrastructure and connection management</li>
+                        <li>More difficult to debug and monitor</li>
+                        <li>Overkill for one-way notifications</li>
+                        <li>Don't work well with existing REST patterns</li>
+                        <li>Harder to secure with standard auth mechanisms</li>
+                    </ul>
+
+                    <h3 class="subsection-title">The SSE Solution</h3>
+                    <div class="feature-grid">
+                        <div class="feature-card">
+                            <div class="feature-icon"><i class="fas fa-network-wired"></i></div>
+                            <h4>HTTP Based</h4>
+                            <p>Works with existing infrastructure - no special proxying or routing needed.</p>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon"><i class="fas fa-browser"></i></div>
+                            <h4>Native Browser Support</h4>
+                            <p>Built-in <code>EventSource</code> API in all modern browsers with automatic reconnection.
+                            </p>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon"><i class="fas fa-arrow-right"></i></div>
+                            <h4>One-Way Communication</h4>
+                            <p>Perfect for notifications - server pushes updates, client remains stateless.</p>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon"><i class="fas fa-database"></i></div>
+                            <h4>REST as Source of Truth</h4>
+                            <p>SSE notifies, REST endpoints provide data - clean separation of concerns.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Installation -->
+                <section id="installation" class="section">
+                    <h2 class="section-title">
+                        <i class="fas fa-download"></i>
+                        Installation
+                    </h2>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>bash</span>
+                            <button class="copy-btn" data-copy="pip install fastapi-sse-events">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-bash">pip install fastapi-sse-events</code></pre>
+                    </div>
+
+                    <h3 class="subsection-title">Requirements</h3>
+                    <ul>
+                        <li>Python 3.10+</li>
+                        <li>FastAPI 0.104.0+</li>
+                        <li>Redis 5.0+ (running locally or remotely)</li>
+                    </ul>
+
+                    <div class="info-card">
+                        <h4><i class="fas fa-info-circle"></i> Redis Setup</h4>
+                        <p>You'll need a Redis server. Quick options:</p>
+                        <div class="code-block">
+                            <div class="code-header">
+                                <span>Docker</span>
+                                <button class="copy-btn" data-copy="docker run -d -p 6379:6379 redis:alpine">
+                                    <i class="fas fa-copy"></i>
+                                    Copy
+                                </button>
+                            </div>
+                            <pre><code class="language-bash">docker run -d -p 6379:6379 redis:alpine</code></pre>
+                        </div>
+                        <div class="code-block">
+                            <div class="code-header">
+                                <span>Local Install</span>
+                                <button class="copy-btn" data-copy="redis-server">
+                                    <i class="fas fa-copy"></i>
+                                    Copy
+                                </button>
+                            </div>
+                            <pre><code class="language-bash">redis-server</code></pre>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Quick Start -->
+                <section id="quick-start" class="section">
+                    <h2 class="section-title">
+                        <i class="fas fa-rocket"></i>
+                        Quick Start
+                    </h2>
+
+                    <div class="success-card">
+                        <h4><i class="fas fa-star"></i> New! Simplified Decorator API</h4>
+                        <p>We now offer a <strong>simplified decorator-based API</strong> that reduces boilerplate by
+                            75%+. Jump to <a href="#simplified-api">Simplified API</a> to see the easiest way to use
+                            this package, or continue reading for the traditional approach.</p>
+                    </div>
+
+                    <p>Get SSE running in your FastAPI app with just a few lines of code:</p>
+
+                    <h3 class="subsection-title"><i class="fas fa-code"></i> 1. Create Your FastAPI App</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>app.py</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-python">from fastapi import FastAPI
+from fastapi_sse_events import mount_sse, RealtimeConfig, TopicBuilder
+
+app = FastAPI()
+
+# Mount SSE with one line
+config = RealtimeConfig(redis_url="redis://localhost:6379")
+mount_sse(app, config)
+
+# Your existing REST endpoints
+@app.post("/tasks")
+async def create_task(task: dict):
+    # ... save task to database ...
+    
+    # Notify SSE subscribers
+    await app.state.event_broker.publish(
+        topic=TopicBuilder.task(task["id"]),
+        event="task:created",
+        data={"id": task["id"], "title": task["title"]}
+    )
+    
+    return task</code></pre>
+                    </div>
+
+                    <h3 class="subsection-title"><i class="fas fa-globe"></i> 2. Connect from Browser</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>client.js</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-javascript">// Subscribe to task updates
+const eventSource = new EventSource('/sse?topics=task:123');
+
+eventSource.addEventListener('task:created', (event) => {
+  const data = JSON.parse(event.data);
+  console.log('New task:', data);
+  // Refresh UI via REST API
+  fetchTaskDetails(data.id);
+});
+
+eventSource.addEventListener('open', () => {
+  console.log('✅ Connected to SSE');
+});</code></pre>
+                    </div>
+
+                    <div class="success-card">
+                        <h4><i class="fas fa-check-circle"></i> That's It!</h4>
+                        <p>You now have real-time notifications. The SSE endpoint is automatically mounted at
+                            <code>/sse</code> and clients receive instant updates when you publish events.</p>
+                    </div>
+                </section>
+
+                <!-- Simplified API -->
+                <section id="simplified-api" class="section">
+                    <h2 class="section-title">
+                        <i class="fas fa-magic"></i>
+                        Simplified API (Recommended)
+                    </h2>
+
+                    <div class="hero-badge" style="margin-bottom: 1rem;">
+                        <i class="fas fa-star"></i>
+                        <span>New in v0.1.0</span>
+                    </div>
+
+                    <p>
+                        The <strong>simplified decorator-based API</strong> makes adding real-time SSE events incredibly
+                        easy by eliminating 75%+ of boilerplate code.
+                        It provides auto-configuration, automatic event publishing via decorators, and automatic SSE
+                        streaming.
+                    </p>
+
+                    <div class="feature-grid">
+                        <div class="feature-card">
+                            <div class="feature-icon"><i class="fas fa-check-circle"></i></div>
+                            <h4>Auto-Configuration</h4>
+                            <p>One-line app setup with automatic broker, Redis, and CORS configuration.</p>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon"><i class="fas fa-magic"></i></div>
+                            <h4>@sse_event Decorator</h4>
+                            <p>Automatically publish endpoint responses as SSE events - no manual calls needed.</p>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon"><i class="fas fa-broadcast-tower"></i></div>
+                            <h4>@sse_endpoint Decorator</h4>
+                            <p>Create SSE streaming endpoints with one decorator - handles everything automatically.</p>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon"><i class="fas fa-bolt"></i></div>
+                            <h4>75% Less Code</h4>
+                            <p>Reduce boilerplate from ~50 lines to ~10 lines. Focus on your business logic.</p>
+                        </div>
+                    </div>
+
+                    <h3 class="subsection-title"><i class="fas fa-rocket"></i> Getting Started (3 Steps)</h3>
+
+                    <h4><strong>Step 1:</strong> Create SSEApp</h4>
+                    <p>Replace <code>FastAPI()</code> with <code>SSEApp()</code> for automatic configuration:</p>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>app.py</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-python">from fastapi import Request
+from fastapi_sse_events import SSEApp, sse_event, sse_endpoint
+
+# One-line setup with auto-configuration!
+app = SSEApp(
+    title="My API",
+    redis_url="redis://localhost:6379"  # or use REDIS_URL env var
+)
+
+# That's it! No manual broker setup, no lifecycle management needed!</code></pre>
+                    </div>
+
+                    <h4><strong>Step 2:</strong> Use @sse_event Decorator</h4>
+                    <p>Automatically publish events when endpoints return:</p>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Python</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-python">@app.post("/comments")
+@sse_event(topic="comments", event="comment_created")
+async def create_comment(request: Request, comment: dict):
+    # Your business logic here
+    new_comment = {"id": 1, "content": comment["content"]}
+    
+    # Just return it - automatically published to SSE clients!
+    return new_comment</code></pre>
+                    </div>
+
+                    <h4><strong>Step 3:</strong> Use @sse_endpoint Decorator</h4>
+                    <p>Create SSE streaming endpoints with zero boilerplate:</p>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Python</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-python">@app.get("/events")
+@sse_endpoint(topics=["comments"])
+async def events(request: Request):
+    pass  # Decorator handles all streaming logic!</code></pre>
+                    </div>
+
+                    <div class="success-card">
+                        <h4><i class="fas fa-check-circle"></i> Complete!</h4>
+                        <p>You now have real-time SSE with minimal code. Open the API docs at
+                            <code>http://localhost:8000/docs</code> to test it!</p>
+                    </div>
+
+                    <h3 class="subsection-title"><i class="fas fa-code"></i> SSEApp - Auto-configured FastAPI</h3>
+
+                    <p>
+                        <code>SSEApp</code> extends <code>FastAPI</code> and automatically configures everything needed
+                        for SSE:
+                    </p>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Python</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-python">from fastapi_sse_events import SSEApp
+
+app = SSEApp(
+    title="My API",
+    version="1.0.0",
+    
+    # Redis connection (choose one)
+    redis_url="redis://localhost:6379",       # Option 1: URL
+    # redis_host="localhost",                  # Option 2: Host/Port
+    # redis_port=6379,
+    # redis_db=0,
+    
+    # Optional settings
+    topic_prefix="myapp:",                    # Prefix all topics
+    enable_cors=True,                         # Auto-enable CORS
+    cors_origins=["*"],                       # Allowed origins
+)</code></pre>
+                    </div>
+
+                    <h4>What SSEApp Does Automatically</h4>
+                    <ul>
+                        <li>✅ Creates and configures <code>EventBroker</code></li>
+                        <li>✅ Sets up Redis connection with Pub/Sub</li>
+                        <li>✅ Manages broker lifecycle (connect on startup, disconnect on shutdown)</li>
+                        <li>✅ Configures CORS middleware (optional)</li>
+                        <li>✅ Makes broker available at <code>app.broker</code> and
+                            <code>request.app.state.broker</code></li>
+                    </ul>
+
+                    <div class="info-card">
+                        <h4><i class="fas fa-info-circle"></i> Environment Variables</h4>
+                        <p>SSEApp reads from environment variables if parameters not provided:</p>
+                        <ul>
+                            <li><code>REDIS_URL</code> - Redis connection URL</li>
+                            <li><code>REDIS_HOST</code> - Redis host (default: localhost)</li>
+                            <li><code>REDIS_PORT</code> - Redis port (default: 6379)</li>
+                            <li><code>REDIS_DB</code> - Redis database (default: 0)</li>
+                            <li><code>TOPIC_PREFIX</code> - Topic prefix (default: "")</li>
+                            <li><code>CORS_ORIGINS</code> - Comma-separated origins (default: *)</li>
+                        </ul>
+                    </div>
+
+                    <h3 class="subsection-title"><i class="fas fa-paper-plane"></i> @sse_event - Auto-Publish Decorator
+                    </h3>
+
+                    <p>
+                        The <code>@sse_event</code> decorator automatically publishes your endpoint's response as an SSE
+                        event.
+                        No more manual <code>broker.publish()</code> calls!
+                    </p>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Python</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-python">from fastapi_sse_events import sse_event
+
+# Explicit topic and event name
+@app.post("/comments")
+@sse_event(topic="comments", event="comment_created")
+async def create_comment(request: Request, comment: dict):
+    return {"id": 1, "content": comment["content"]}
+
+# Auto-infer topic from route path
+@app.post("/threads/{thread_id}/comments")
+@sse_event()  # Auto-infers topic: "threads.comments"
+async def add_comment(request: Request, thread_id: int, comment: dict):
+    return {"id": 1, "thread_id": thread_id, **comment}
+
+# Custom data extraction
+@app.post("/users")
+@sse_event(
+    topic="users",
+    extract_data=lambda resp: {"user_id": resp["id"]}  # Only publish ID
+)
+async def create_user(request: Request, user: dict):
+    full_user = {"id": 1, "password": "secret", **user}
+    return full_user  # Only {"user_id": 1} published to SSE</code></pre>
+                    </div>
+
+                    <h4>Decorator Parameters</h4>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Parameter</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>topic</code></td>
+                                <td>str | None</td>
+                                <td>Topic to publish to. Auto-inferred from route if None.</td>
+                            </tr>
+                            <tr>
+                                <td><code>event</code></td>
+                                <td>str | None</td>
+                                <td>Event name. Uses function name if None.</td>
+                            </tr>
+                            <tr>
+                                <td><code>extract_data</code></td>
+                                <td>Callable | None</td>
+                                <td>Function to transform response before publishing.</td>
+                            </tr>
+                            <tr>
+                                <td><code>auto_topic</code></td>
+                                <td>bool</td>
+                                <td>Auto-generate topic from route path (default: True).</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h4>Auto-Topic Inference</h4>
+                    <p>When <code>topic</code> is not provided, the decorator infers it from the route path:</p>
+                    <ul>
+                        <li><code>/comments</code> → <code>comments</code></li>
+                        <li><code>/threads/123/comments</code> → <code>threads.comments</code></li>
+                        <li><code>/api/v1/users/456</code> → <code>users</code> (filters out "api", "v1", IDs)</li>
+                    </ul>
+
+                    <div class="warning-card">
+                        <h4><i class="fas fa-exclamation-triangle"></i> Important</h4>
+                        <p>You must add <code>request: Request</code> parameter to your endpoint for the decorator to
+                            work. The decorator needs access to the app state to publish events.</p>
+                    </div>
+
+                    <h3 class="subsection-title"><i class="fas fa-broadcast-tower"></i> @sse_endpoint - Auto-Streaming
+                        Decorator</h3>
+
+                    <p>
+                        The <code>@sse_endpoint</code> decorator creates SSE streaming endpoints with zero boilerplate.
+                        It handles subscription, event streaming, heartbeat, and connection management automatically.
+                    </p>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Python</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-python">from fastapi_sse_events import sse_endpoint
+
+# Simple SSE endpoint with static topics
+@app.get("/events")
+@sse_endpoint(topics=["comments", "users"])
+async def events(request: Request):
+    pass  # Decorator handles everything!
+
+# Dynamic topics from query params
+@app.get("/events/dynamic")
+@sse_endpoint()  # Topics from ?topic=comments,users
+async def events_dynamic(request: Request):
+    pass
+
+# With authorization
+async def check_auth(request: Request, topic: str) -> bool:
+    user = await get_current_user(request)
+    return user.can_access(topic)
+
+@app.get("/events/secure")
+@sse_endpoint(topics=["comments"], authorize=check_auth)
+async def events_secure(request: Request):
+    pass
+
+# Custom heartbeat
+@app.get("/events/fast")
+@sse_endpoint(topics=["live-data"], heartbeat=10)  # 10 second heartbeat
+async def events_fast(request: Request):
+    pass</code></pre>
+                    </div>
+
+                    <h4>Decorator Parameters</h4>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Parameter</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>topics</code></td>
+                                <td>list[str] | None</td>
+                                <td>Topics to subscribe to. Uses query param if None.</td>
+                            </tr>
+                            <tr>
+                                <td><code>authorize</code></td>
+                                <td>Callable | None</td>
+                                <td>Authorization function <code>(request, topic) → bool</code>.</td>
+                            </tr>
+                            <tr>
+                                <td><code>heartbeat</code></td>
+                                <td>int</td>
+                                <td>Heartbeat interval in seconds (default: 30, 0 to disable).</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h3 class="subsection-title"><i class="fas fa-balance-scale"></i> Before vs After Comparison</h3>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin: 2rem 0;">
+                        <div>
+                            <h4 style="color: #888;">❌ Before (Manual API)</h4>
+                            <div class="code-block">
+                                <div class="code-header">
+                                    <span>~50 lines</span>
+                                </div>
+                                <pre><code class="language-python">from fastapi import FastAPI
+from fastapi_sse_events import (
+    EventBroker, RealtimeConfig,
+    RedisBackend, mount_sse
+)
+
+app = FastAPI()
+
+# Manual configuration
+config = RealtimeConfig(
+    redis_url="redis://localhost:6379"
+)
+redis_backend = RedisBackend(config)
+broker = EventBroker(config, redis_backend)
+
+# Manual lifecycle
+@app.on_event("startup")
+async def startup():
+    await redis_backend.connect()
+
+@app.on_event("shutdown")
+async def shutdown():
+    await redis_backend.disconnect()
+
+# Manual publishing
+@app.post("/comments")
+async def create_comment(comment: dict):
+    new_comment = {"id": 1, **comment}
+    
+    # Manual broker call
+    await broker.publish(
+        topic="comments",
+        event="comment_created",
+        data=new_comment
+    )
+    
+    return new_comment
+
+# Manual SSE endpoint
+mount_sse(app, broker)</code></pre>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h4 style="color: #22c55e;">✅ After (Simplified API)</h4>
+                            <div class="code-block">
+                                <div class="code-header">
+                                    <span>~10 lines</span>
+                                </div>
+                                <pre><code class="language-python">from fastapi import Request
+from fastapi_sse_events import (
+    SSEApp, sse_event, sse_endpoint
+)
+
+# One-line setup!
+app = SSEApp(
+    redis_url="redis://localhost:6379"
+)
+
+# Auto-publishing
+@app.post("/comments")
+@sse_event(topic="comments")
+async def create_comment(
+    request: Request,
+    comment: dict
+):
+    new_comment = {"id": 1, **comment}
+    return new_comment  # Auto-published!
+
+# Auto-streaming
+@app.get("/events")
+@sse_endpoint(topics=["comments"])
+async def events(request: Request):
+    pass  # All automatic!</code></pre>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="success-card">
+                        <h4><i class="fas fa-chart-line"></i> 80% Reduction in Boilerplate</h4>
+                        <p>The simplified API reduces setup from ~50 lines to ~10 lines, letting you focus on your
+                            business logic instead of configuration.</p>
+                    </div>
+
+                    <h3 class="subsection-title"><i class="fas fa-exchange-alt"></i> Migration from Manual API</h3>
+
+                    <p>Migrating to the simplified API is straightforward and can be done gradually:</p>
+
+                    <h4>Step 1: Replace FastAPI with SSEApp</h4>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Before → After</span>
+                        </div>
+                        <pre><code class="language-python"># Before
+app = FastAPI()
+config = RealtimeConfig(redis_url="...")
+# ... manual setup ...
+
+# After
+app = SSEApp(redis_url="...")</code></pre>
+                    </div>
+
+                    <h4>Step 2: Add Decorators</h4>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Before → After</span>
+                        </div>
+                        <pre><code class="language-python"># Before
+@app.post("/comments")
+async def create_comment(comment: dict):
+    new_comment = save(comment)
+    await broker.publish("comments", "created", new_comment)
+    return new_comment
+
+# After
+@app.post("/comments")
+@sse_event(topic="comments", event="created")
+async def create_comment(request: Request, comment: dict):
+    new_comment = save(comment)
+    return new_comment  # Auto-published!</code></pre>
+                    </div>
+
+                    <h4>Step 3: Simplify SSE Endpoints</h4>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Before → After</span>
+                        </div>
+                        <pre><code class="language-python"># Before
+mount_sse(app, broker, authorize_fn)
+# Or manual endpoint creation...
+
+# After
+@app.get("/events")
+@sse_endpoint(topics=["comments"], authorize=authorize_fn)
+async def events(request: Request):
+    pass</code></pre>
+                    </div>
+
+                    <div class="info-card">
+                        <h4><i class="fas fa-info-circle"></i> Fully Backwards Compatible</h4>
+                        <p>
+                            The simplified API is fully backwards compatible. You can mix both APIs in the same
+                            application:
+                            use decorators for new endpoints while keeping manual <code>broker.publish()</code> calls in
+                            existing code.
+                            Access the broker directly via <code>app.broker</code> or
+                            <code>request.app.state.broker</code>.
+                        </p>
+                    </div>
+
+                    <h3 class="subsection-title"><i class="fas fa-book"></i> Complete Example</h3>
+
+                    <p>Here's a complete CRM comments system using the simplified API:</p>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>app_simple.py</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-python">"""Simplified CRM Comments with SSE"""
+from fastapi import Request, HTTPException
+from pydantic import BaseModel
+from fastapi_sse_events import SSEApp, sse_event, sse_endpoint
+
+# One-line app setup
+app = SSEApp(
+    title="CRM Comments",
+    redis_url="redis://localhost:6379",
+    enable_cors=True
+)
+
+# In-memory storage
+comments_db = {}
+comment_id = 0
+
+class CommentCreate(BaseModel):
+    thread_id: int
+    author: str
+    content: str
+
+# CRUD endpoints with auto-publishing
+@app.post("/comments")
+@sse_event(topic="comments", event="comment_created")
+async def create_comment(request: Request, comment: CommentCreate):
+    global comment_id
+    comment_id += 1
+    
+    new_comment = {
+        "id": comment_id,
+        "thread_id": comment.thread_id,
+        "author": comment.author,
+        "content": comment.content
+    }
+    
+    comments_db[comment_id] = new_comment
+    return new_comment  # Auto-published to SSE!
+
+@app.put("/comments/{comment_id}")
+@sse_event(topic="comments", event="comment_updated")
+async def update_comment(
+    request: Request,
+    comment_id: int,
+    content: str
+):
+    if comment_id not in comments_db:
+        raise HTTPException(404, "Not found")
+    
+    comments_db[comment_id]["content"] = content
+    return comments_db[comment_id]  # Auto-published!
+
+@app.delete("/comments/{comment_id}")
+@sse_event(topic="comments", event="comment_deleted")
+async def delete_comment(request: Request, comment_id: int):
+    if comment_id not in comments_db:
+        raise HTTPException(404, "Not found")
+    
+    deleted = comments_db.pop(comment_id)
+    return {"id": comment_id}  # Auto-published!
+
+@app.get("/comments")
+async def list_comments():
+    return list(comments_db.values())
+
+# SSE endpoint with auto-streaming
+@app.get("/events")
+@sse_endpoint(topics=["comments"])
+async def events(request: Request):
+    pass  # All automatic!
+
+# Run with: uvicorn app_simple:app --reload</code></pre>
+                    </div>
+
+                    <div class="success-card">
+                        <h4><i class="fas fa-rocket"></i> Try It!</h4>
+                        <p>
+                            The complete example is available in <code>examples/crm_comments/app_simple.py</code>.
+                            Run it with: <code>cd examples/crm_comments && ./start_simple.sh</code>
+                        </p>
+                    </div>
+
+                    <h3 class="subsection-title"><i class="fas fa-question-circle"></i> FAQ</h3>
+
+                    <h4>Can I still use the manual API?</h4>
+                    <p>
+                        Yes! The simplified API is built on top of the manual API and both work together.
+                        You can access the broker directly via <code>app.broker.publish(...)</code> whenever needed.
+                    </p>
+
+                    <h4>Do I need the Request parameter?</h4>
+                    <p>
+                        Yes, for <code>@sse_event</code> and <code>@sse_endpoint</code> decorators.
+                        The decorators need access to the app state where the broker is stored.
+                        Add <code>request: Request</code> as the first parameter after <code>self</code> (for class
+                        methods).
+                    </p>
+
+                    <h4>Can I use dynamic topics?</h4>
+                    <p>
+                        Yes! You can still use manual <code>app.broker.publish()</code> for dynamic topics like
+                        <code>f"thread:{thread_id}"</code>,
+                        or use the decorator for general topics and manual publish for specific ones.
+                    </p>
+
+                    <h4>What about authorization?</h4>
+                    <p>
+                        Use the <code>authorize</code> parameter in <code>@sse_endpoint</code>:
+                        <code>@sse_endpoint(authorize=my_auth_function)</code>.
+                        The function receives <code>(request, topic)</code> and returns <code>True/False</code>.
+                    </p>
+
+                    <h4>Does it work with dependency injection?</h4>
+                    <p>
+                        Yes! FastAPI dependencies work normally. Just make sure <code>request: Request</code> is one of
+                        your parameters.
+                    </p>
+
+                </section>
+
+                <!-- Architecture -->
+                <section id="architecture" class="section">
+                    <h2 class="section-title">
+                        <i class="fas fa-sitemap"></i>
+                        Architecture
+                    </h2>
+
+                    <p>FastAPI SSE Events uses a simple but powerful architecture:</p>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Architecture Flow</span>
+                        </div>
+                        <pre><code class="language-plaintext">┌─────────────┐         ┌─────────────┐         ┌─────────────┐
+│   Browser   │  SSE    │  FastAPI    │  Pub    │    Redis    │
+│   Client    │◄────────│   Instance  │◄────────│   Pub/Sub   │
+└─────────────┘         └─────────────┘         └─────────────┘
+      │                       │                        ▲
+      │                       │                        │
+      │  POST /api/task       │  Publish Event         │
+      └──────────────────────►│───────────────────────►│
+                              │                        │
+                              │   Subscribe Topics     │
+                              └───────────────────────►│</code></pre>
+                    </div>
+
+                    <h3 class="subsection-title">Flow Breakdown</h3>
+                    <ol>
+                        <li><strong>Client connects</strong> to <code>/sse?topics=task:123</code></li>
+                        <li><strong>FastAPI subscribes</strong> to Redis channels matching those topics</li>
+                        <li><strong>Another client</strong> makes a POST request that modifies data</li>
+                        <li><strong>Your endpoint</strong> publishes event to Redis: <code>task:created</code></li>
+                        <li><strong>Redis broadcasts</strong> to all subscribed FastAPI instances</li>
+                        <li><strong>FastAPI forwards</strong> event to connected SSE clients</li>
+                        <li><strong>Browser receives</strong> notification and refreshes data via REST</li>
+                    </ol>
+
+                    <div class="info-card">
+                        <h4><i class="fas fa-server"></i> Horizontal Scaling</h4>
+                        <p>
+                            Because Redis Pub/Sub is used as the message broker, you can run multiple FastAPI instances
+                            behind a load balancer. An event published by any instance reaches all connected clients
+                            across all instances.
+                        </p>
+                    </div>
+                </section>
+
+                <!-- Features -->
+                <section id="features" class="section">
+                    <h2 class="section-title">
+                        <i class="fas fa-star"></i>
+                        Features
+                    </h2>
+
+                    <div class="feature-grid">
+                        <div class="feature-card">
+                            <div class="feature-icon"><i class="fas fa-plug"></i></div>
+                            <h4>Simple Integration</h4>
+                            <p>Add SSE with 3 lines of code. Minimal changes to existing endpoints. Works alongside your
+                                REST API.</p>
+                        </div>
+
+                        <div class="feature-card">
+                            <div class="feature-icon"><i class="fas fa-broadcast-tower"></i></div>
+                            <h4>Server-Sent Events</h4>
+                            <p>Lightweight, one-way communication (server → client). Built on standard HTTP with
+                                automatic reconnection.</p>
+                        </div>
+
+                        <div class="feature-card">
+                            <div class="feature-icon"><i class="fas fa-database"></i></div>
+                            <h4>Redis Pub/Sub</h4>
+                            <p>Horizontal scaling across multiple API instances. Battle-tested message broker with low
+                                latency.</p>
+                        </div>
+
+                        <div class="feature-card">
+                            <div class="feature-icon"><i class="fas fa-lock"></i></div>
+                            <h4>Authorization Hooks</h4>
+                            <p>Secure topic subscriptions with custom auth logic. Integrate with your existing
+                                authentication system.</p>
+                        </div>
+
+                        <div class="feature-card">
+                            <div class="feature-icon"><i class="fas fa-heartbeat"></i></div>
+                            <h4>Heartbeat Support</h4>
+                            <p>Automatic connection keepalive with configurable intervals. Prevents proxy timeouts.</p>
+                        </div>
+
+                        <div class="feature-card">
+                            <div class="feature-icon"><i class="fas fa-tags"></i></div>
+                            <h4>Topic-based Routing</h4>
+                            <p>Fine-grained subscription control per resource. Subscribe to exactly what you need.</p>
+                        </div>
+
+                        <div class="feature-card">
+                            <div class="feature-icon"><i class="fas fa-shield-alt"></i></div>
+                            <h4>Type Safe</h4>
+                            <p>Full type hints and mypy compliance. Catch errors at development time, not runtime.</p>
+                        </div>
+
+                        <div class="feature-card">
+                            <div class="feature-icon"><i class="fas fa-check-double"></i></div>
+                            <h4>Well Tested</h4>
+                            <p>Comprehensive test suite with 80%+ coverage. Production-ready and battle-tested.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- How It Works -->
+                <section id="how-it-works" class="section">
+                    <h2 class="section-title">
+                        <i class="fas fa-cogs"></i>
+                        How It Works
+                    </h2>
+
+                    <h3 class="subsection-title">The "Notify Then Fetch" Pattern</h3>
+                    <p>
+                        FastAPI SSE Events implements a clean separation between notifications and data:
+                    </p>
+
+                    <ol>
+                        <li><strong>SSE notifies</strong> that something changed</li>
+                        <li><strong>Client fetches</strong> fresh data via REST</li>
+                        <li><strong>REST API</strong> remains the source of truth</li>
+                    </ol>
+
+                    <div class="warning-card">
+                        <h4><i class="fas fa-exclamation-triangle"></i> SSE vs Full Data Push</h4>
+                        <p>
+                            We recommend sending lightweight notifications (IDs, types) via SSE rather than full
+                            objects. This keeps your REST API as the canonical data source and reduces bandwidth.
+                            Clients can intelligently fetch only changed resources.
+                        </p>
+                    </div>
+
+                    <h3 class="subsection-title">Example Flow</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>sequence-diagram</span>
+                        </div>
+                        <pre><code class="language-plaintext">User A                  Server                  User B
+  │                         │                      │
+  │  1. POST /comments      │                      │
+  │────────────────────────►│                      │
+  │                         │                      │
+  │                         │  2. SSE Event        │
+  │                         │────────────────────►│
+  │                         │   "comment:created"  │
+  │                         │                      │
+  │                         │  3. GET /comments    │
+  │                         │◄────────────────────│
+  │                         │                      │
+  │                         │  4. Fresh Data       │
+  │                         │────────────────────►│</code></pre>
+                    </div>
+                </section>
+
+                <!-- Basic Integration -->
+                <section id="basic-integration" class="section">
+                    <h2 class="section-title">
+                        <i class="fas fa-plug"></i>
+                        Basic Integration
+                    </h2>
+
+                    <h3 class="subsection-title">Step 1: Configure SSE</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Python</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-python">from fastapi import FastAPI
+from fastapi_sse_events import mount_sse, RealtimeConfig
+
+app = FastAPI()
+
+# Configure SSE
+config = RealtimeConfig(
+    redis_url="redis://localhost:6379",
+    sse_path="/sse",                 # SSE endpoint path
+    heartbeat_seconds=30,             # Keepalive interval
+    topic_prefix="myapp"              # Namespace topics
+)
+
+# Mount SSE (adds startup/shutdown handlers + endpoint)
+mount_sse(app, config)</code></pre>
+                    </div>
+
+                    <h3 class="subsection-title">Step 2: Publish Events</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Python</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-python">from fastapi_sse_events import EventData, TopicBuilder
+
+@app.post("/comments")
+async def create_comment(comment: CommentCreate):
+    # Save to database
+    saved_comment = await db.save(comment)
+    
+    # Publish SSE event
+    await app.state.event_broker.publish(
+        topic=TopicBuilder.comment_thread(comment.thread_id),
+        event="comment:created",
+        data=EventData(
+            id=str(saved_comment.id),
+            type="comment",
+            attributes={"thread_id": comment.thread_id}
+        )
+    )
+    
+    return saved_comment</code></pre>
+                    </div>
+
+                    <h3 class="subsection-title">Step 3: Subscribe from Client</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>JavaScript</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-javascript">// Connect to SSE endpoint
+const sse = new EventSource('/sse?topics=comment-thread:42');
+
+// Listen for specific events
+sse.addEventListener('comment:created', (event) => {
+  const data = JSON.parse(event.data);
+  console.log('New comment:', data);
+  
+  // Refresh data from REST API
+  fetchComments(data.attributes.thread_id);
+});
+
+// Connection status
+sse.addEventListener('open', () => {
+  console.log('Connected to SSE');
+});
+
+sse.addEventListener('error', (error) => {
+  console.error('SSE error:', error);
+  // EventSource auto-reconnects
+});</code></pre>
+                    </div>
+                </section>
+
+                <!-- Publishing Events -->
+                <section id="publishing-events" class="section">
+                    <h2 class="section-title">
+                        <i class="fas fa-paper-plane"></i>
+                        Publishing Events
+                    </h2>
+
+                    <p>
+                        Events are published using the <code>EventBroker</code> available at
+                        <code>app.state.event_broker</code>:
+                    </p>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Python</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-python">await app.state.event_broker.publish(
+    topic="resource:123",      # Who should receive this
+    event="resource:updated",  # Event type (custom string)
+    data={                     # Payload (dict or EventData)
+        "id": "123",
+        "changed_fields": ["status"]
+    }
+)</code></pre>
+                    </div>
+
+                    <h3 class="subsection-title">Event Format</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Parameter</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>topic</code></td>
+                                <td>str</td>
+                                <td>Topic subscribers are listening to (e.g., "task:123")</td>
+                            </tr>
+                            <tr>
+                                <td><code>event</code></td>
+                                <td>str</td>
+                                <td>Event type identifier (e.g., "task:updated")</td>
+                            </tr>
+                            <tr>
+                                <td><code>data</code></td>
+                                <td>dict | EventData</td>
+                                <td>Event payload (serialized to JSON)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h3 class="subsection-title">Common Event Patterns</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Python</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-python"># Resource Created
+await broker.publish(
+    topic=TopicBuilder.workspace(workspace_id),
+    event="task:created",
+    data={"id": task_id, "title": "New Task"}
+)
+
+# Resource Updated
+await broker.publish(
+    topic=TopicBuilder.task(task_id),
+    event="task:updated",
+    data={"id": task_id, "fields": ["status", "assignee"]}
+)
+
+# Resource Deleted
+await broker.publish(
+    topic=TopicBuilder.task(task_id),
+    event="task:deleted",
+    data={"id": task_id}
+)
+
+# Broadcast to All
+await broker.publish(
+    topic="global",
+    event="system:maintenance",
+    data={"message": "Scheduled maintenance in 5 minutes"}
+)</code></pre>
+                    </div>
+                </section>
+
+                <!-- Authorization -->
+                <section id="authorization" class="section">
+                    <h2 class="section-title">
+                        <i class="fas fa-lock"></i>
+                        Authorization
+                    </h2>
+
+                    <p>
+                        Protect your SSE endpoint by providing an authorization callback that validates whether a user
+                        can subscribe to specific topics:
+                    </p>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Python</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-python">from fastapi import Request, HTTPException
+from fastapi_sse_events import mount_sse, RealtimeConfig
+
+async def authorize_sse(request: Request, topic: str) -> bool:
+    """
+    Called for each topic a client wants to subscribe to.
+    Return True to allow, False to deny.
+    Raise HTTPException for authentication errors.
+    """
+    # Get user from request (JWT, session, etc.)
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(401, "Unauthorized")
+    
+    # Check topic permissions
+    if topic.startswith("workspace:"):
+        workspace_id = topic.split(":")[1]
+        if not await user_has_workspace_access(user, workspace_id):
+            return False
+    
+    if topic.startswith("user:"):
+        user_id = topic.split(":")[1]
+        if user_id != str(user.id):
+            return False  # Users can only subscribe to their own updates
+    
+    # Default: allow
+    return True
+
+# Mount SSE with authorization
+mount_sse(app, config, authorize=authorize_sse)</code></pre>
+                    </div>
+
+                    <div class="warning-card">
+                        <h4><i class="fas fa-shield-alt"></i> Security Best Practices</h4>
+                        <ul>
+                            <li>Always validate user authentication in the authorize callback</li>
+                            <li>Use granular topic patterns (e.g., "workspace:123") that include resource IDs</li>
+                            <li>Don't allow wildcard subscriptions without careful consideration</li>
+                            <li>Log authorization failures for security monitoring</li>
+                            <li>Consider rate limiting SSE connections per user</li>
+                        </ul>
+                    </div>
+                </section>
+
+                <!-- Topic Patterns -->
+                <section id="topic-patterns" class="section">
+                    <h2 class="section-title">
+                        <i class="fas fa-tags"></i>
+                        Topic Patterns
+                    </h2>
+
+                    <p>
+                        Topics are string identifiers that route events to subscribers. Use the
+                        <code>TopicBuilder</code> helper for common patterns:
+                    </p>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Python</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-python">from fastapi_sse_events import TopicBuilder
+
+# Built-in patterns
+TopicBuilder.comment_thread("thread-123")  # → "comment-thread:thread-123"
+TopicBuilder.ticket("ticket-456")          # → "ticket:ticket-456"
+TopicBuilder.task("task-789")              # → "task:task-789"
+TopicBuilder.workspace("workspace-42")     # → "workspace:workspace-42"
+TopicBuilder.user("user-99")               # → "user:user-99"
+
+# Custom topics
+TopicBuilder.custom("invoice", "inv-001")  # → "invoice:inv-001"</code></pre>
+                    </div>
+
+                    <h3 class="subsection-title">Topic Design Guidelines</h3>
+
+                    <div class="feature-grid">
+                        <div class="search-type-card">
+                            <div class="search-type-icon"><i class="fas fa-sitemap"></i></div>
+                            <h4>Hierarchical</h4>
+                            <p>Use colons to create namespace hierarchy: <code>workspace:42:task:123</code></p>
+                        </div>
+
+                        <div class="search-type-card">
+                            <div class="search-type-icon"><i class="fas fa-fingerprint"></i></div>
+                            <h4>Resource-Specific</h4>
+                            <p>Include resource IDs for fine-grained subscriptions: <code>user:john</code></p>
+                        </div>
+
+                        <div class="search-type-card">
+                            <div class="search-type-icon"><i class="fas fa-broadcast-tower"></i></div>
+                            <h4>Broadcast Topics</h4>
+                            <p>Use special topics for app-wide events: <code>global</code>, <code>system</code></p>
+                        </div>
+
+                        <div class="search-type-card">
+                            <div class="search-type-icon"><i class="fas fa-layer-group"></i></div>
+                            <h4>Multi-Level</h4>
+                            <p>Clients can subscribe to multiple topics: <code>?topics=task:1,task:2,workspace:5</code>
+                            </p>
+                        </div>
+                    </div>
+
+                    <h3 class="subsection-title">Examples</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Topic Usage</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-javascript">// Subscribe to specific task
+new EventSource('/sse?topics=task:123')
+
+// Subscribe to workspace activity
+new EventSource('/sse?topics=workspace:42')
+
+// Subscribe to multiple topics
+new EventSource('/sse?topics=task:1,task:2,user:john')
+
+// Subscribe to broadcast + specific
+new EventSource('/sse?topics=global,workspace:42')</code></pre>
+                    </div>
+                </section>
+
+                <!-- Configuration -->
+                <section id="configuration" class="section">
+                    <h2 class="section-title">
+                        <i class="fas fa-sliders-h"></i>
+                        Configuration
+                    </h2>
+
+                    <p>Configure SSE behavior using the <code>RealtimeConfig</code> class:</p>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Python</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-python">from fastapi_sse_events import RealtimeConfig
+
+config = RealtimeConfig(
+    redis_url="redis://localhost:6379",    # Redis connection
+    heartbeat_seconds=30,                   # Keepalive interval
+    sse_path="/sse",                        # SSE endpoint path
+    topic_prefix="myapp",                   # Topic namespace
+    redis_max_retries=5,                    # Connection retries
+    redis_retry_delay=1.0                   # Retry delay (seconds)
+)</code></pre>
+                    </div>
+
+                    <h3 class="subsection-title">Configuration Options</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Option</th>
+                                <th>Type</th>
+                                <th>Default</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>redis_url</code></td>
+                                <td>str</td>
+                                <td>Required</td>
+                                <td>Redis connection URL</td>
+                            </tr>
+                            <tr>
+                                <td><code>heartbeat_seconds</code></td>
+                                <td>int</td>
+                                <td>30</td>
+                                <td>SSE keepalive interval (5-60)</td>
+                            </tr>
+                            <tr>
+                                <td><code>sse_path</code></td>
+                                <td>str</td>
+                                <td>"/sse"</td>
+                                <td>SSE endpoint path</td>
+                            </tr>
+                            <tr>
+                                <td><code>topic_prefix</code></td>
+                                <td>str</td>
+                                <td>""</td>
+                                <td>Namespace for all topics</td>
+                            </tr>
+                            <tr>
+                                <td><code>redis_max_retries</code></td>
+                                <td>int</td>
+                                <td>5</td>
+                                <td>Max Redis connection retries</td>
+                            </tr>
+                            <tr>
+                                <td><code>redis_retry_delay</code></td>
+                                <td>float</td>
+                                <td>1.0</td>
+                                <td>Retry delay in seconds</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h3 class="subsection-title">Environment Variables</h3>
+                    <p>Configuration can be loaded from environment variables with <code>SSE_</code> prefix:</p>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>.env</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-bash">SSE_REDIS_URL=redis://localhost:6379
+SSE_HEARTBEAT_SECONDS=30
+SSE_PATH=/events
+SSE_TOPIC_PREFIX=production</code></pre>
+                    </div>
+                </section>
+
+                <!-- JavaScript Client -->
+                <section id="javascript-client" class="section">
+                    <h2 class="section-title">
+                        <i class="fab fa-js"></i>
+                        JavaScript Client
+                    </h2>
+
+                    <p>Use the native <code>EventSource</code> API in the browser:</p>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>JavaScript</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-javascript">// Initialize connection
+const eventSource = new EventSource('/sse?topics=workspace:42');
+
+// Listen for specific event types
+eventSource.addEventListener('task:created', (event) => {
+  const data = JSON.parse(event.data);
+  console.log('Task created:', data);
+  
+  // Refresh UI
+  addTaskToUI(data.id);
+});
+
+eventSource.addEventListener('task:updated', (event) => {
+  const data = JSON.parse(event.data);
+  console.log('Task updated:', data);
+  
+  // Update existing task in UI
+  updateTaskInUI(data.id);
+});
+
+// Connection lifecycle
+eventSource.addEventListener('open', () => {
+  console.log('✅ SSE Connected');
+  document.getElementById('status').textContent = 'Connected';
+});
+
+eventSource.addEventListener('error', (error) => {
+  console.error('❌ SSE Error:', error);
+  document.getElementById('status').textContent = 'Disconnected';
+  // EventSource automatically attempts reconnection
+});
+
+// Heartbeat (optional - for debugging)
+eventSource.addEventListener('heartbeat', () => {
+  console.log('💓 Heartbeat received');
+});
+
+// Clean up when done
+function cleanup() {
+  eventSource.close();
+}</code></pre>
+                    </div>
+
+                    <div class="info-card">
+                        <h4><i class="fas fa-sync-alt"></i> Automatic Reconnection</h4>
+                        <p>
+                            <code>EventSource</code> automatically reconnects if the connection drops. You don't need to
+                            implement retry logic - just handle the <code>open</code> event to know when reconnection
+                            succeeds.
+                        </p>
+                    </div>
+                </section>
+
+                <!-- React Client -->
+                <section id="react-client" class="section">
+                    <h2 class="section-title">
+                        <i class="fab fa-react"></i>
+                        React Client
+                    </h2>
+
+                    <p>Create a custom hook for managing SSE connections in React:</p>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>useSSE.ts</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-typescript">import { useEffect, useCallback, useState } from 'react';
+
+interface UseSSEOptions {
+  topics: string[];
+  onEvent?: (event: string, data: any) => void;
+}
+
+export function useSSE({ topics, onEvent }: UseSSEOptions) {
+  const [connected, setConnected] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    const topicsParam = topics.join(',');
+    const eventSource = new EventSource(`/sse?topics=${topicsParam}`);
+
+    // Connection opened
+    eventSource.addEventListener('open', () => {
+      setConnected(true);
+      setError(null);
+    });
+
+    // Connection error
+    eventSource.addEventListener('error', (e) => {
+      setConnected(false);
+      setError(new Error('SSE connection error'));
+    });
+
+    // Generic message handler
+    eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      onEvent?.(event.type, data);
+    };
+
+    // Cleanup
+    return () => {
+      eventSource.close();
+    };
+  }, [topics.join(','), onEvent]);
+
+  return { connected, error };
+}
+
+// Usage in component
+export function TaskList({ workspaceId }: { workspaceId: string }) {
+  const [tasks, setTasks] = useState([]);
+
+  const handleSSE = useCallback((event: string, data: any) => {
+    if (event === 'task:created') {
+      // Fetch new task and add to list
+      fetchTask(data.id).then(task => {
+        setTasks(prev => [...prev, task]);
+      });
+    } else if (event === 'task:updated') {
+      // Refresh updated task
+      fetchTask(data.id).then(updatedTask => {
+        setTasks(prev => prev.map(t => 
+          t.id === updatedTask.id ? updatedTask : t
+        ));
+      });
+    }
+  }, []);
+
+  useSSE({
+    topics: [`workspace:${workspaceId}`],
+    onEvent: handleSSE
+  });
+
+  return (
+    <ul>
+      {tasks.map(task => (
+        <li key={task.id}>{task.title}</li>
+      ))}
+    </ul>
+  );
+}</code></pre>
+                    </div>
+                </section>
+
+                <!-- Python Client -->
+                <section id="python-client" class="section">
+                    <h2 class="section-title">
+                        <i class="fab fa-python"></i>
+                        Python Client
+                    </h2>
+
+                    <p>Connect to SSE from Python using <code>httpx</code> or <code>sseclient-py</code>:</p>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Python (httpx)</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-python">import httpx
+import json
+
+async def listen_sse():
+    async with httpx.AsyncClient() as client:
+        async with client.stream(
+            'GET',
+            'http://localhost:8000/sse?topics=workspace:42',
+            headers={'Accept': 'text/event-stream'}
+        ) as response:
+            async for line in response.aiter_lines():
+                if line.startswith('data:'):
+                    data_str = line[5:].strip()
+                    data = json.loads(data_str)
+                    print(f"Event received: {data}")
+                elif line.startswith('event:'):
+                    event_type = line[6:].strip()
+                    print(f"Event type: {event_type}")</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Python (sseclient-py)</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-python">from sseclient import SSEClient
+import json
+
+url = 'http://localhost:8000/sse?topics=workspace:42'
+
+for event in SSEClient(url):
+    if event.event != 'heartbeat':
+        data = json.loads(event.data)
+        print(f"Event: {event.event}, Data: {data}")</code></pre>
+                    </div>
+                </section>
+
+                <!-- Production Setup -->
+                <section id="production-setup" class="section">
+                    <h2 class="section-title">
+                        <i class="fas fa-server"></i>
+                        Production Setup
+                    </h2>
+
+                    <h3 class="subsection-title">Redis Configuration</h3>
+                    <p>For production, use a managed Redis service or configure Redis with persistence:</p>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>redis.conf</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-bash"># Memory management
+maxmemory 2gb
+maxmemory-policy allkeys-lru
+
+# Persistence (optional for pub/sub)
+save ""
+appendonly no
+
+# Network
+bind 0.0.0.0
+protected-mode yes
+requirepass your-secure-password
+
+# Pub/Sub specific
+timeout 0
+tcp-keepalive 300</code></pre>
+                    </div>
+
+                    <h3 class="subsection-title">Environment Variables</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>.env</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-bash"># Redis
+SSE_REDIS_URL=redis://:password@redis-host:6379/0
+
+# SSE Config
+SSE_HEARTBEAT_SECONDS=30
+SSE_PATH=/sse
+SSE_TOPIC_PREFIX=production
+
+# FastAPI
+APP_ENV=production
+LOG_LEVEL=info</code></pre>
+                    </div>
+
+                    <h3 class="subsection-title">Uvicorn Production Settings</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>bash</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-bash">uvicorn app:app \
+  --host 0.0.0.0 \
+  --port 8000 \
+  --workers 4 \
+  --loop uvloop \
+  --log-level info \
+  --proxy-headers \
+  --forwarded-allow-ips='*'</code></pre>
+                    </div>
+                </section>
+
+                <!-- Nginx Config -->
+                <section id="nginx-config" class="section">
+                    <h2 class="section-title">
+                        <i class="fas fa-network-wired"></i>
+                        Nginx Configuration
+                    </h2>
+
+                    <p>Configure Nginx to proxy SSE connections with proper timeouts:</p>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>nginx.conf</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-nginx">upstream fastapi_backend {
+    server 127.0.0.1:8000;
+    server 127.0.0.1:8001;
+    server 127.0.0.1:8002;
+    keepalive 32;
+}
+
+server {
+    listen 80;
+    server_name api.example.com;
+
+    # Standard API endpoints
+    location / {
+        proxy_pass http://fastapi_backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    # SSE endpoint - special configuration
+    location /sse {
+        proxy_pass http://fastapi_backend;
+        proxy_http_version 1.1;
+        
+        # SSE specific headers
+        proxy_set_header Connection '';
+        proxy_set_header Cache-Control 'no-cache';
+        
+        # Disable buffering
+        proxy_buffering off;
+        proxy_cache off;
+        
+        # Long timeouts for SSE
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+        
+        # Forward headers
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        
+        # Chunked transfer encoding
+        chunked_transfer_encoding on;
+    }
+}</code></pre>
+                    </div>
+
+                    <div class="warning-card">
+                        <h4><i class="fas fa-exclamation-triangle"></i> Critical SSE Settings</h4>
+                        <ul>
+                            <li><code>proxy_buffering off</code> - Prevents Nginx from buffering SSE responses</li>
+                            <li><code>proxy_read_timeout 86400s</code> - Long timeout for persistent connections</li>
+                            <li><code>proxy_http_version 1.1</code> - Required for persistent connections</li>
+                            <li><code>chunked_transfer_encoding on</code> - Enables streaming</li>
+                        </ul>
+                    </div>
+                </section>
+
+                <!-- Docker -->
+                <section id="docker" class="section">
+                    <h2 class="section-title">
+                        <i class="fab fa-docker"></i>
+                        Docker Deployment
+                    </h2>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>docker-compose.yml</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-yaml">version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  api:
+    build: .
+    command: uvicorn app:app --host 0.0.0.0 --port 8000
+    environment:
+      SSE_REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      SSE_HEARTBEAT_SECONDS: 30
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+    restart: unless-stopped
+    deploy:
+      replicas: 3
+      
+volumes:
+  redis_data:</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Dockerfile</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-dockerfile">FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application
+COPY . .
+
+# Run
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]</code></pre>
+                    </div>
+                </section>
+
+                <!-- Performance -->
+                <section id="performance" class="section">
+                    <h2 class="section-title">
+                        <i class="fas fa-tachometer-alt"></i>
+                        Performance Tips
+                    </h2>
+
+                    <div class="feature-grid">
+                        <div class="feature-card">
+                            <div class="feature-icon"><i class="fas fa-layer-group"></i></div>
+                            <h4>Horizontal Scaling</h4>
+                            <p>Run multiple FastAPI instances behind a load balancer. Redis Pub/Sub ensures events reach
+                                all instances.</p>
+                        </div>
+
+                        <div class="feature-card">
+                            <div class="feature-icon"><i class="fas fa-filter"></i></div>
+                            <h4>Granular Topics</h4>
+                            <p>Use specific topics (e.g., <code>task:123</code>) instead of broad wildcards to reduce
+                                unnecessary events.</p>
+                        </div>
+
+                        <div class="feature-card">
+                            <div class="feature-icon"><i class="fas fa-feather-alt"></i></div>
+                            <h4>Lightweight Payloads</h4>
+                            <p>Send IDs and types via SSE, not full objects. Let clients fetch complete data via REST.
+                            </p>
+                        </div>
+
+                        <div class="feature-card">
+                            <div class="feature-icon"><i class="fas fa-heartbeat"></i></div>
+                            <h4>Tune Heartbeat</h4>
+                            <p>Balance connection keepalive (30-60s) with bandwidth. Higher intervals reduce traffic.
+                            </p>
+                        </div>
+
+                        <div class="feature-card">
+                            <div class="feature-icon"><i class="fas fa-memory"></i></div>
+                            <h4>Redis Memory</h4>
+                            <p>Pub/Sub uses minimal memory. Configure <code>maxmemory-policy</code> appropriately if
+                                using Redis for caching too.</p>
+                        </div>
+
+                        <div class="feature-card">
+                            <div class="feature-icon"><i class="fas fa-chart-line"></i></div>
+                            <h4>Monitor Connections</h4>
+                            <p>Track active SSE connections and Redis pub/sub channels. Set alerts for anomalies.</p>
+                        </div>
+                    </div>
+
+                    <h3 class="subsection-title">Connection Limits</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Component</th>
+                                <th>Limit</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Redis Pub/Sub</td>
+                                <td>Unlimited channels</td>
+                                <td>Memory is per connection, not per channel</td>
+                            </tr>
+                            <tr>
+                                <td>FastAPI Instance</td>
+                                <td>~10K connections</td>
+                                <td>Depends on system resources</td>
+                            </tr>
+                            <tr>
+                                <td>Nginx</td>
+                                <td>Configurable</td>
+                                <td>Set <code>worker_connections</code></td>
+                            </tr>
+                            <tr>
+                                <td>Browser</td>
+                                <td>6 per domain</td>
+                                <td>HTTP/1.1 limitation</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <!-- API Reference -->
+                <section id="api-reference" class="section">
+                    <h2 class="section-title">
+                        <i class="fas fa-code"></i>
+                        API Reference
+                    </h2>
+
+                    <h3 class="subsection-title">mount_sse()</h3>
+                    <p>Mount SSE endpoint and lifecycle handlers to your FastAPI app.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Python</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-python">def mount_sse(
+    app: FastAPI,
+    config: RealtimeConfig,
+    authorize: AuthorizeFn | None = None
+) -> None</code></pre>
+                    </div>
+
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Parameter</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>app</code></td>
+                                <td>FastAPI</td>
+                                <td>Your FastAPI application instance</td>
+                            </tr>
+                            <tr>
+                                <td><code>config</code></td>
+                                <td>RealtimeConfig</td>
+                                <td>SSE configuration</td>
+                            </tr>
+                            <tr>
+                                <td><code>authorize</code></td>
+                                <td>AuthorizeFn | None</td>
+                                <td>Optional authorization callback</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h3 class="subsection-title">RealtimeConfig</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Python</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-python">class RealtimeConfig(BaseSettings):
+    redis_url: str
+    heartbeat_seconds: int = 30
+    sse_path: str = "/sse"
+    topic_prefix: str = ""
+    redis_max_retries: int = 5
+    redis_retry_delay: float = 1.0</code></pre>
+                    </div>
+
+                    <h3 class="subsection-title">EventBroker.publish()</h3>
+                    <p>Publish an event to a topic.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Python</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-python">async def publish(
+    self,
+    topic: str,
+    event: str,
+    data: dict | EventData
+) -> None</code></pre>
+                    </div>
+
+                    <h3 class="subsection-title">TopicBuilder</h3>
+                    <p>Helper class for building topic strings.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Python</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-python">class TopicBuilder:
+    @staticmethod
+    def comment_thread(thread_id: str) -> str
+    
+    @staticmethod
+    def ticket(ticket_id: str) -> str
+    
+    @staticmethod
+    def task(task_id: str) -> str
+    
+    @staticmethod
+    def workspace(workspace_id: str) -> str
+    
+    @staticmethod
+    def user(user_id: str) -> str
+    
+    @staticmethod
+    def custom(resource_type: str, resource_id: str) -> str</code></pre>
+                    </div>
+
+                    <h3 class="subsection-title">EventData</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Python</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-python">class EventData(BaseModel):
+    id: str
+    type: str
+    attributes: dict[str, Any] = {}</code></pre>
+                    </div>
+                </section>
+
+                <!-- Examples -->
+                <section id="examples" class="section">
+                    <h2 class="section-title">
+                        <i class="fas fa-book"></i>
+                        Examples
+                    </h2>
+
+                    <h3 class="subsection-title">CRM Comments Example</h3>
+                    <p>
+                        A complete working example is included in the repository at <code>examples/crm_comments/</code>.
+                        This demonstrates a multi-user comment system with real-time updates.
+                    </p>
+
+                    <div class="info-card">
+                        <h4><i class="fas fa-folder"></i> Example Files</h4>
+                        <ul>
+                            <li><code>app.py</code> - FastAPI server with CRUD + SSE</li>
+                            <li><code>client.html</code> - Beautiful web UI with EventSource</li>
+                            <li><code>start.sh</code> - Quick start script</li>
+                        </ul>
+                    </div>
+
+                    <h3 class="subsection-title">Running the Example</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>bash</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-bash">cd examples/crm_comments
+./start.sh
+
+# Or manually:
+pip install -r requirements.txt
+uvicorn app:app --reload</code></pre>
+                    </div>
+
+                    <p>Open <code>http://localhost:8000/client.html</code> in multiple browser windows to see real-time
+                        updates!</p>
+                </section>
+
+                <!-- Troubleshooting -->
+                <section id="troubleshooting" class="section">
+                    <h2 class="section-title">
+                        <i class="fas fa-bug"></i>
+                        Troubleshooting
+                    </h2>
+
+                    <h3 class="subsection-title">Connection Issues</h3>
+
+                    <div class="warning-card">
+                        <h4><i class="fas fa-exclamation-circle"></i> SSE not connecting</h4>
+                        <ul>
+                            <li>Check Redis is running: <code>redis-cli ping</code></li>
+                            <li>Verify SSE path in client matches server config</li>
+                            <li>Check browser console for CORS errors</li>
+                            <li>Ensure no firewall blocking port 6379</li>
+                        </ul>
+                    </div>
+
+                    <div class="warning-card">
+                        <h4><i class="fas fa-clock"></i> Connection drops frequently</h4>
+                        <ul>
+                            <li>Reduce <code>heartbeat_seconds</code> (try 15-20s)</li>
+                            <li>Check proxy/load balancer timeout settings</li>
+                            <li>Verify Nginx buffering is disabled for SSE path</li>
+                            <li>Monitor network stability</li>
+                        </ul>
+                    </div>
+
+                    <h3 class="subsection-title">Event Issues</h3>
+
+                    <div class="warning-card">
+                        <h4><i class="fas fa-paper-plane"></i> Events not received</h4>
+                        <ul>
+                            <li>Verify client subscribed to correct topic</li>
+                            <li>Check server is publishing to matching topic</li>
+                            <li>Confirm <code>topic_prefix</code> matches on both sides</li>
+                            <li>Test Redis pub/sub: <code>redis-cli subscribe topic:123</code></li>
+                        </ul>
+                    </div>
+
+                    <div class="warning-card">
+                        <h4><i class="fas fa-server"></i> Events only work on one server</h4>
+                        <ul>
+                            <li>Verify all FastAPI instances use same Redis</li>
+                            <li>Check Redis connection string includes correct host</li>
+                            <li>Ensure no firewall between servers and Redis</li>
+                        </ul>
+                    </div>
+
+                    <h3 class="subsection-title">Performance Issues</h3>
+
+                    <div class="warning-card">
+                        <h4><i class="fas fa-memory"></i> High memory usage</h4>
+                        <ul>
+                            <li>Check number of active SSE connections</li>
+                            <li>Verify event payloads are small</li>
+                            <li>Monitor Redis memory with <code>redis-cli info memory</code></li>
+                            <li>Consider connection limits per user</li>
+                        </ul>
+                    </div>
+
+                    <h3 class="subsection-title">Debug Mode</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>JavaScript</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-javascript">// Enable verbose logging
+const eventSource = new EventSource('/sse?topics=debug');
+
+eventSource.onmessage = (event) => {
+  console.log('Raw SSE:', event);
+};
+
+// Monitor all event types
+['open', 'error', 'message'].forEach(type => {
+  eventSource.addEventListener(type, (e) => {
+    console.log(`[${type}]`, e);
+  });
+});</code></pre>
+                    </div>
+                </section>
+
+            </div>
+        </main>
+
+        <!-- Right Sidebar - Table of Contents -->
+        <aside class="right-sidebar">
+            <div class="toc-title">On This Page</div>
+            <nav class="toc-nav" id="tocNav">
+                <a href="#overview" class="toc-link">Overview</a>
+                <a href="#why-sse" class="toc-link">Why SSE?</a>
+                <a href="#installation" class="toc-link">Installation</a>
+                <a href="#quick-start" class="toc-link">Quick Start</a>
+                <a href="#architecture" class="toc-link">Architecture</a>
+                <a href="#features" class="toc-link">Features</a>
+                <a href="#basic-integration" class="toc-link">Basic Integration</a>
+                <a href="#publishing-events" class="toc-link">Publishing Events</a>
+                <a href="#authorization" class="toc-link">Authorization</a>
+                <a href="#topic-patterns" class="toc-link">Topic Patterns</a>
+                <a href="#configuration" class="toc-link">Configuration</a>
+                <a href="#javascript-client" class="toc-link">JavaScript Client</a>
+                <a href="#react-client" class="toc-link">React Client</a>
+                <a href="#python-client" class="toc-link">Python Client</a>
+                <a href="#production-setup" class="toc-link">Production Setup</a>
+                <a href="#nginx-config" class="toc-link">Nginx</a>
+                <a href="#docker" class="toc-link">Docker</a>
+                <a href="#performance" class="toc-link">Performance</a>
+                <a href="#api-reference" class="toc-link">API Reference</a>
+                <a href="#examples" class="toc-link">Examples</a>
+                <a href="#troubleshooting" class="toc-link">Troubleshooting</a>
+            </nav>
+        </aside>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-container">
+            <div class="footer-section">
+                <h4>Documentation</h4>
+                <ul>
+                    <li><a href="#getting-started">Getting Started</a></li>
+                    <li><a href="#api-reference">API Reference</a></li>
+                    <li><a href="#examples">Examples</a></li>
+                </ul>
+            </div>
+            <div class="footer-section">
+                <h4>Community</h4>
+                <ul>
+                    <li><a href="https://github.com/yourusername/fastapi-sse-events" target="_blank">GitHub</a></li>
+                    <li><a href="https://github.com/yourusername/fastapi-sse-events/issues" target="_blank">Issues</a>
+                    </li>
+                    <li><a href="https://github.com/yourusername/fastapi-sse-events/discussions"
+                            target="_blank">Discussions</a></li>
+                </ul>
+            </div>
+            <div class="footer-section">
+                <h4>More</h4>
+                <ul>
+                    <li><a href="https://fastapi.tiangolo.com/" target="_blank">FastAPI</a></li>
+                    <li><a href="https://redis.io/" target="_blank">Redis</a></li>
+                    <li><a href="https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events"
+                            target="_blank">SSE Spec</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>
+                FastAPI SSE Events is MIT licensed.
+                Built with ❤️ for the FastAPI community.
+            </p>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-nginx.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-dockerfile.min.js"></script>
+    <script src="script.js"></script>
+</body>
+
+</html>
