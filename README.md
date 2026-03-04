@@ -3,11 +3,23 @@
 > Server-Sent Events (SSE) notifications for FastAPI using Redis Pub/Sub
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![PyPI version](https://img.shields.io/pypi/v/fastapi-sse-events.svg)](https://pypi.org/project/fastapi-sse-events/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Tests](https://github.com/bhadri01/fastapi_sse_events/workflows/Tests/badge.svg)](https://github.com/bhadri01/fastapi_sse_events/actions)
+[![codecov](https://codecov.io/gh/bhadri01/fastapi_sse_events/branch/main/graph/badge.svg)](https://codecov.io/gh/bhadri01/fastapi_sse_events)
 
 **Add real-time "refresh-less" updates to your FastAPI REST API in minutes.**
 
 Perfect for collaborative tools (CRMs, project management, dashboards) where multiple users need to see updates instantly without manual page refreshes.
+
+---
+
+## 📚 Documentation
+
+- **[Full Documentation](https://bhadri01.github.io/fastapi_sse_events)** - Complete guide with examples
+- **[PyPI Package](https://pypi.org/project/fastapi-sse-events/)** - Installation and releases
+- **[GitHub Repository](https://github.com/bhadri01/fastapi_sse_events)** - Source code and issues
+- **[Changelog](https://github.com/bhadri01/fastapi_sse_events/blob/main/CHANGELOG.md)** - Version history
 
 ---
 
@@ -97,59 +109,46 @@ redis-server
 ### 2. Add to Your FastAPI App
 
 ```python
-from fastapi import FastAPI
-from fastapi_sse_events import mount_sse, RealtimeConfig
+from fastapi import Request
+from fastapi_sse_events import SSEApp, publish_event, subscribe_to_events
 
-app = FastAPI()
-
-# Mount SSE with one line
-broker = mount_sse(app)
-
-# Or with custom config
-config = RealtimeConfig(
-    redis_url="redis://localhost:6379/0",
-    heartbeat_seconds=30,
+app = SSEApp(
+  title="My API",
+  redis_url="redis://localhost:6379/0",
 )
-broker = mount_sse(app, config)
+
+@app.get("/events")
+@subscribe_to_events()
+async def events(request: Request):
+  pass
 ```
 
 ### 3. Publish Events from Your Endpoints
 
 ```python
-from fastapi_sse_events import TopicBuilder
-
-topics = TopicBuilder()
-
 @app.post("/comments")
-async def create_comment(comment: Comment):
-    # Save comment to database
-    saved_comment = await db.save(comment)
-    
-    # Notify subscribers
-    await broker.publish(
-        topic=topics.comment_thread(comment.thread_id),
-        event="comment_created",
-        data={"comment_id": saved_comment.id}
-    )
-    
-    return saved_comment
+@publish_event(topic="comments", event="comment_created")
+async def create_comment(request: Request, comment: Comment):
+  # Save comment to database
+  saved_comment = await db.save(comment)
+  return saved_comment  # Auto-published to SSE clients
 ```
 
 ### 4. Subscribe from Client
 
 ```javascript
 // Connect to SSE stream
-const eventSource = new EventSource(
-  'http://localhost:8000/events?topic=comment_thread:123'
-);
+const eventSource = new EventSource('http://localhost:8000/events?topic=comments');
 
 // Handle events
 eventSource.addEventListener('comment_created', (e) => {
   const data = JSON.parse(e.data);
-  console.log('New comment:', data.comment_id);
-  
-  // Refresh data via existing REST endpoint
-  refreshComments();
+  console.log('Comment event:', data);
+
+  // Notify-then-fetch pattern (recommended)
+  fetch(`http://localhost:8000/comments/${data.id}`)
+    .then(r => r.json())
+    .then(renderComment);
 });
 ```
 
@@ -215,32 +214,41 @@ Fetch Updated Data ← REST Endpoint
 
 ## Usage Guide
 
-### Basic Integration
+### Basic Integration (Recommended)
 
 ```python
-from fastapi import FastAPI
-from fastapi_sse_events import mount_sse, RealtimeConfig
+from fastapi import Request
+from fastapi_sse_events import SSEApp, publish_event, subscribe_to_events
 
-app = FastAPI()
+app = SSEApp(redis_url="redis://localhost:6379/0")
 
-# Simple setup
-broker = mount_sse(app)
+@app.post("/tickets/{ticket_id}/status")
+@publish_event(topic="tickets", event="ticket_status_changed")
+async def update_ticket_status(request: Request, ticket_id: int, status: str):
+  await db.update_ticket(ticket_id, status=status)
+  return {"id": ticket_id, "status": status}
 
-# Advanced setup
-config = RealtimeConfig(
-    redis_url="redis://localhost:6379/0",
-    heartbeat_seconds=15,
-    sse_path="/events",
-    topic_prefix="prod",  # Namespace for multi-tenancy
-)
-broker = mount_sse(app, config)
+@app.get("/events")
+@subscribe_to_events()  # topics via ?topic=tickets
+async def events(request: Request):
+  pass
 ```
 
-The SSE endpoint is automatically registered at `/events` (or your custom path).
+Use `SSEApp` + decorators for minimal boilerplate. Keep `mount_sse()` for advanced/manual integration.
 
 ### Publishing Events
 
-#### Method 1: Direct Publish
+#### Method 1: Decorator-Based Publish (Recommended)
+
+```python
+@app.post("/tickets/{ticket_id}/status")
+@publish_event(topic="tickets", event="ticket_status_changed")
+async def update_ticket_status(request: Request, ticket_id: int, status: str):
+  await db.update_ticket(ticket_id, status=status)
+  return {"id": ticket_id, "status": status}
+```
+
+#### Method 2: Direct Publish (Advanced)
 
 ```python
 @app.post("/tickets/{ticket_id}/status")
@@ -262,7 +270,7 @@ async def update_ticket_status(ticket_id: int, status: str):
     return {"status": "updated"}
 ```
 
-#### Method 2: Using TopicBuilder
+#### Method 3: Using TopicBuilder
 
 ```python
 from fastapi_sse_events import TopicBuilder
@@ -282,7 +290,7 @@ async def create_task(task: Task):
     return saved_task
 ```
 
-#### Method 3: Service Layer Pattern (Recommended)
+#### Method 4: Service Layer Pattern
 
 ```python
 # services/comment_service.py
@@ -1027,21 +1035,82 @@ SetEnv proxy-nokeepalive 1
 
 ---
 
-## Contributing
+## 🤝 Contributing
 
-Contributions welcome! Please:
+Contributions are welcome! Here's how you can help:
 
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new features
-4. Ensure `pytest`, `ruff`, and `mypy` pass
-5. Submit a pull request
+### Development Setup
+
+```bash
+# Clone repository
+git clone https://github.com/bhadri01/fastapi_sse_events.git
+cd fastapi_sse_events
+
+# Install with dev dependencies
+pip install -e ".[dev]"
+
+# Run tests
+pytest tests/ -v
+
+# Run linting
+ruff check fastapi_sse_events/ tests/ examples/
+ruff format fastapi_sse_events/ tests/ examples/
+
+# Run type checking
+mypy fastapi_sse_events/
+```
+
+### Contribution Guidelines
+
+1. **Fork** the repository
+2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
+3. **Add tests** for new features
+4. **Ensure** all tests pass (`pytest`)
+5. **Run** linting and formatting (`ruff`)
+6. **Commit** your changes (`git commit -m 'Add amazing feature'`)
+7. **Push** to the branch (`git push origin feature/amazing-feature`)
+8. **Open** a Pull Request
+
+### Reporting Issues
+
+- Use [GitHub Issues](https://github.com/bhadri01/fastapi_sse_events/issues)
+- Include Python version, FastAPI version, and Redis version
+- Provide minimal reproducible example
+- Check existing issues first
 
 ---
 
-## License
+## 📄 License
 
-MIT License - see [LICENSE](LICENSE) file for details.
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+
+Copyright © 2025 [bhadri01](https://github.com/bhadri01)
+
+---
+
+## 🙏 Acknowledgments
+
+- Built with [FastAPI](https://fastapi.tiangolo.com/)
+- Powered by [Redis](https://redis.io/)
+- SSE support via [sse-starlette](https://github.com/sysid/sse-starlette)
+
+---
+
+## 🔗 Related Projects
+
+- **[fastapi-querybuilder](https://github.com/bhadri01/fastapi-querybuilder)** - Advanced query building for FastAPI + SQLAlchemy
+
+---
+
+## ⭐ Star History
+
+If you find this project helpful, please consider giving it a star on GitHub!
+
+[![Star History Chart](https://api.star-history.com/svg?repos=bhadri01/fastapi_sse_events&type=Date)](https://star-history.com/#bhadri01/fastapi_sse_events&Date)
+
+---
+
+Made with ❤️ by [bhadri01](https://github.com/bhadri01)
 
 ---
 

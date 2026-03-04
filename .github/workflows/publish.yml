@@ -1,0 +1,67 @@
+name: Release Pipeline
+
+on:
+  push:
+    tags:
+      - 'v*' # Trigger on semantic version tags (e.g., v1.0.0)
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required to create releases
+      packages: write # Required if publishing packages
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Get full history for tag verification
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install poetry
+          sudo apt-get install -y gpg
+
+      - name: Fetch and verify tag
+        run: |
+          TAG_NAME=$(echo ${{ github.ref }} | cut -d'/' -f3)
+          git fetch --tags
+          if git tag -l | grep -q "$TAG_NAME"; then
+            echo "Tag $TAG_NAME verified successfully"
+          else
+            echo "Tag $TAG_NAME does not exist. Exiting..."
+            exit 1
+          fi
+
+      - name: Build package
+        run: |
+          poetry build
+          sha256sum dist/* > dist/checksums.txt
+          cat dist/checksums.txt
+
+      - name: Publish to PyPI
+        env:
+          PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          poetry publish --username __token__ --password $PYPI_TOKEN
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: ${{ github.ref_name }}
+          body_path: CHANGELOG.md
+          files: |
+            dist/*.whl
+            dist/*.tar.gz
+            dist/checksums.txt
+
+      - name: Verify published assets
+        run: |
+          gh release view ${{ github.ref_name }} --json assets -q '.assets[].name' | grep -q '.whl$'
+          gh release view ${{ github.ref_name }} --json assets -q '.assets[].name' | grep -q 'checksums.txt'
+        env:
+          GH_TOKEN: ${{ github.token }}

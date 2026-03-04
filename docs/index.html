@@ -37,7 +37,7 @@
                     <a href="#getting-started">Docs</a>
                     <a href="#examples">Examples</a>
                     <a href="#api-reference">API</a>
-                    <a href="https://github.com/yourusername/fastapi-sse-events" target="_blank">GitHub</a>
+                    <a href="https://github.com/bhadri01/fastapi_sse_events" target="_blank">GitHub</a>
                 </nav>
             </div>
             <div class="header-right">
@@ -300,10 +300,10 @@
                     </h2>
 
                     <div class="success-card">
-                        <h4><i class="fas fa-star"></i> New! Simplified Decorator API</h4>
-                        <p>We now offer a <strong>simplified decorator-based API</strong> that reduces boilerplate by
-                            75%+. Jump to <a href="#simplified-api">Simplified API</a> to see the easiest way to use
-                            this package, or continue reading for the traditional approach.</p>
+                        <h4><i class="fas fa-star"></i> Recommended Flow</h4>
+                        <p>Use the <strong>simplified decorator-based API</strong> with
+                            <code>SSEApp</code>, <code>@publish_event</code>, and
+                            <code>@subscribe_to_events</code>. This is the current, recommended approach.</p>
                     </div>
 
                     <p>Get SSE running in your FastAPI app with just a few lines of code:</p>
@@ -317,28 +317,24 @@
                                 Copy
                             </button>
                         </div>
-                        <pre><code class="language-python">from fastapi import FastAPI
-from fastapi_sse_events import mount_sse, RealtimeConfig, TopicBuilder
+                        <pre><code class="language-python">from fastapi import Request
+from fastapi_sse_events import SSEApp, publish_event, subscribe_to_events
 
-app = FastAPI()
+app = SSEApp(
+    title="My API",
+    redis_url="redis://localhost:6379"
+)
 
-# Mount SSE with one line
-config = RealtimeConfig(redis_url="redis://localhost:6379")
-mount_sse(app, config)
-
-# Your existing REST endpoints
 @app.post("/tasks")
-async def create_task(task: dict):
+@publish_event(topic="tasks", event="task:created")
+async def create_task(request: Request, task: dict):
     # ... save task to database ...
-    
-    # Notify SSE subscribers
-    await app.state.event_broker.publish(
-        topic=TopicBuilder.task(task["id"]),
-        event="task:created",
-        data={"id": task["id"], "title": task["title"]}
-    )
-    
-    return task</code></pre>
+    return {"id": 1, **task}  # auto-published to SSE clients
+
+@app.get("/events")
+@subscribe_to_events()
+async def events(request: Request):
+    pass</code></pre>
                     </div>
 
                     <h3 class="subsection-title"><i class="fas fa-globe"></i> 2. Connect from Browser</h3>
@@ -350,25 +346,28 @@ async def create_task(task: dict):
                                 Copy
                             </button>
                         </div>
-                        <pre><code class="language-javascript">// Subscribe to task updates
-const eventSource = new EventSource('/sse?topics=task:123');
+                                                <pre><code class="language-javascript">// Subscribe to topic from query param
+const eventSource = new EventSource('/events?topic=tasks');
 
-eventSource.addEventListener('task:created', (event) => {
-  const data = JSON.parse(event.data);
-  console.log('New task:', data);
-  // Refresh UI via REST API
-  fetchTaskDetails(data.id);
+eventSource.addEventListener('task:created', async (event) => {
+    const data = JSON.parse(event.data);
+    console.log('Task event:', data);
+
+    // Notify-then-fetch pattern (recommended)
+    const response = await fetch(`/tasks/${data.id}`);
+    const task = await response.json();
+    renderTask(task);
 });
 
 eventSource.addEventListener('open', () => {
-  console.log('✅ Connected to SSE');
+    console.log('✅ Connected to SSE');
 });</code></pre>
                     </div>
 
                     <div class="success-card">
                         <h4><i class="fas fa-check-circle"></i> That's It!</h4>
-                        <p>You now have real-time notifications. The SSE endpoint is automatically mounted at
-                            <code>/sse</code> and clients receive instant updates when you publish events.</p>
+                        <p>You now have real-time notifications. Clients connect to
+                            <code>/events?topic=...</code> and receive instant updates when decorated endpoints return.</p>
                     </div>
                 </section>
 
@@ -1166,7 +1165,7 @@ async def events(request: Request):
                         Basic Integration
                     </h2>
 
-                    <h3 class="subsection-title">Step 1: Configure SSE</h3>
+                    <h3 class="subsection-title">Step 1: Create SSEApp</h3>
                     <div class="code-block">
                         <div class="code-header">
                             <span>Python</span>
@@ -1175,24 +1174,16 @@ async def events(request: Request):
                                 Copy
                             </button>
                         </div>
-                        <pre><code class="language-python">from fastapi import FastAPI
-from fastapi_sse_events import mount_sse, RealtimeConfig
+                        <pre><code class="language-python">from fastapi import Request
+from fastapi_sse_events import SSEApp, publish_event, subscribe_to_events
 
-app = FastAPI()
-
-# Configure SSE
-config = RealtimeConfig(
-    redis_url="redis://localhost:6379",
-    sse_path="/sse",                 # SSE endpoint path
-    heartbeat_seconds=30,             # Keepalive interval
-    topic_prefix="myapp"              # Namespace topics
-)
-
-# Mount SSE (adds startup/shutdown handlers + endpoint)
-mount_sse(app, config)</code></pre>
+app = SSEApp(
+    title="My API",
+    redis_url="redis://localhost:6379"
+)</code></pre>
                     </div>
 
-                    <h3 class="subsection-title">Step 2: Publish Events</h3>
+                    <h3 class="subsection-title">Step 2: Publish Events with Decorators</h3>
                     <div class="code-block">
                         <div class="code-header">
                             <span>Python</span>
@@ -1201,28 +1192,29 @@ mount_sse(app, config)</code></pre>
                                 Copy
                             </button>
                         </div>
-                        <pre><code class="language-python">from fastapi_sse_events import EventData, TopicBuilder
-
-@app.post("/comments")
-async def create_comment(comment: CommentCreate):
+                        <pre><code class="language-python">@app.post("/comments")
+@publish_event(topic="comments", event="comment:created")
+async def create_comment(request: Request, comment: dict):
     # Save to database
-    saved_comment = await db.save(comment)
-    
-    # Publish SSE event
-    await app.state.event_broker.publish(
-        topic=TopicBuilder.comment_thread(comment.thread_id),
-        event="comment:created",
-        data=EventData(
-            id=str(saved_comment.id),
-            type="comment",
-            attributes={"thread_id": comment.thread_id}
-        )
-    )
-    
-    return saved_comment</code></pre>
+    saved_comment = {"id": 1, **comment}
+    return saved_comment  # auto-published</code></pre>
                     </div>
 
-                    <h3 class="subsection-title">Step 3: Subscribe from Client</h3>
+                    <h3 class="subsection-title">Step 3: Create SSE Endpoint + Client Subscription</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Python</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-python">@app.get("/events")
+@subscribe_to_events()  # topics from ?topic=...
+async def events(request: Request):
+    pass</code></pre>
+                    </div>
+
                     <div class="code-block">
                         <div class="code-header">
                             <span>JavaScript</span>
@@ -1232,15 +1224,15 @@ async def create_comment(comment: CommentCreate):
                             </button>
                         </div>
                         <pre><code class="language-javascript">// Connect to SSE endpoint
-const sse = new EventSource('/sse?topics=comment-thread:42');
+const sse = new EventSource('/events?topic=comments');
 
 // Listen for specific events
 sse.addEventListener('comment:created', (event) => {
   const data = JSON.parse(event.data);
   console.log('New comment:', data);
-  
+
   // Refresh data from REST API
-  fetchComments(data.attributes.thread_id);
+    fetch(`/comments/${data.id}`).then(r => r.json()).then(renderComment);
 });
 
 // Connection status
