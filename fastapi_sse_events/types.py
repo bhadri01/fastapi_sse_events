@@ -1,6 +1,7 @@
 """Type definitions for FastAPI SSE Events."""
 
-from typing import Any, Awaitable, Callable, TypeAlias
+from collections.abc import Awaitable, Callable
+from typing import Any, TypeAlias
 
 from fastapi import Request
 from pydantic import BaseModel, Field

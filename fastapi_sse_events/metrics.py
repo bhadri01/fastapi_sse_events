@@ -4,7 +4,7 @@ import asyncio
 import logging
 import time
 from collections import defaultdict
-from typing import Any, Dict
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 class MetricsCollector:
     """
     Collects metrics for monitoring SSE system health and performance.
-    
+
     Essential for production deployments with 10K+ concurrent connections.
     Integrates with Prometheus, StatsD, or custom monitoring solutions.
     """
@@ -20,31 +20,31 @@ class MetricsCollector:
     def __init__(self):
         """Initialize metrics collector."""
         self._start_time = time.time()
-        
+
         # Connection metrics
         self._total_connections = 0
         self._current_connections = 0
         self._failed_connections = 0
         self._rejected_connections = 0  # Due to rate limiting
-        
+
         # Message metrics
         self._messages_published = 0
         self._messages_delivered = 0
         self._messages_dropped = 0  # Slow consumer drops
         self._publish_errors = 0
-        
+
         # Topic metrics
         self._active_topics = 0
-        self._topic_subscribers: Dict[str, int] = defaultdict(int)
-        
+        self._topic_subscribers: dict[str, int] = defaultdict(int)
+
         # Performance metrics
         self._publish_latencies: list[float] = []
         self._max_latencies = 100  # Keep last 100 measurements
-        
+
         # Redis metrics
         self._redis_reconnects = 0
         self._redis_errors = 0
-        
+
         # Lock for thread-safe updates
         self._lock = asyncio.Lock()
 
@@ -116,30 +116,30 @@ class MetricsCollector:
         async with self._lock:
             self._redis_errors += 1
 
-    async def get_metrics(self) -> Dict[str, Any]:
+    async def get_metrics(self) -> dict[str, Any]:
         """
         Get current metrics snapshot.
-        
+
         Returns:
             Dictionary with all current metrics
         """
         async with self._lock:
             uptime_seconds = time.time() - self._start_time
-            
+
             # Calculate average latency
             avg_latency = (
                 sum(self._publish_latencies) / len(self._publish_latencies)
                 if self._publish_latencies
                 else 0
             )
-            
+
             # Calculate P95 latency
             p95_latency = 0
             if self._publish_latencies:
                 sorted_latencies = sorted(self._publish_latencies)
                 p95_index = int(len(sorted_latencies) * 0.95)
                 p95_latency = sorted_latencies[p95_index] if p95_index < len(sorted_latencies) else 0
-            
+
             return {
                 "uptime_seconds": uptime_seconds,
                 "connections": {
@@ -172,35 +172,35 @@ class MetricsCollector:
     def _calculate_health_status(self) -> str:
         """
         Calculate overall health status.
-        
+
         Returns:
             Health status: "healthy", "degraded", or "unhealthy"
         """
         # Check for critical issues
         if self._current_connections == 0 and self._failed_connections > 10:
             return "unhealthy"
-        
+
         # Check for degraded performance
         if self._messages_dropped > self._messages_delivered * 0.1:  # >10% drop rate
             return "degraded"
-        
+
         if self._redis_errors > 10:
             return "degraded"
-        
+
         if self._publish_errors > self._messages_published * 0.05:  # >5% error rate
             return "degraded"
-        
+
         return "healthy"
 
     async def get_prometheus_format(self) -> str:
         """
         Get metrics in Prometheus format.
-        
+
         Returns:
             String with Prometheus-formatted metrics
         """
         metrics = await self.get_metrics()
-        
+
         lines = [
             "# HELP sse_connections_current Current number of SSE connections",
             "# TYPE sse_connections_current gauge",
@@ -231,7 +231,7 @@ class MetricsCollector:
             f"sse_publish_latency_ms {metrics['performance']['avg_publish_latency_ms']}",
             "",
         ]
-        
+
         return "\n".join(lines)
 
 

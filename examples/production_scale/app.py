@@ -13,7 +13,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from fastapi_sse_events import mount_sse, publish_event, RealtimeConfig
+from fastapi_sse_events import RealtimeConfig, mount_sse, publish_event
 
 # Create FastAPI app
 app = FastAPI(
@@ -84,23 +84,23 @@ async def root():
 
 @app.post("/data")
 @publish_event(topic="data_updates", event="created")
-async def create_data(request: Request, item: DataItem) -> DataItem:
+async def create_data(_request: Request, item: DataItem) -> DataItem:
     """
     Create data item and automatically publish SSE event.
-    
+
     The @publish_event decorator handles everything automatically.
     """
     global counter
     counter += 1
-    
+
     new_item = DataItem(
         id=counter,
         topic=item.topic,
         content=item.content,
     )
-    
+
     data_store[counter] = new_item
-    
+
     # Decorator automatically publishes SSE event to "data_updates" topic
     return new_item
 
@@ -121,7 +121,7 @@ async def list_data():
 
 if __name__ == "__main__":
     import uvicorn
-    
+
     # Production configuration
     uvicorn.run(
         app,

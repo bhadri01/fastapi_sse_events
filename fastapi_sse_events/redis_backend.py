@@ -2,7 +2,8 @@
 
 import asyncio
 import logging
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
+from typing import Any
 
 import redis.asyncio as redis
 from redis.asyncio.client import PubSub

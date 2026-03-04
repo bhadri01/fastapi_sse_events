@@ -66,17 +66,17 @@ class Comment(BaseModel):
 
 @app.post("/comments", response_model=Comment, status_code=status.HTTP_201_CREATED)
 @sse_event(topic="comments", event="comment_created")  # Automatically publishes!
-async def create_comment(request: Request, comment: CommentCreate) -> Comment:
+async def create_comment(_request: Request, comment: CommentCreate) -> Comment:
     """
     Create a new comment.
-    
+
     The @sse_event decorator automatically publishes the result to SSE clients.
     No manual broker.publish() needed!
     """
     global comment_id_counter
     comment_id_counter += 1
     comment_id = str(comment_id_counter)
-    
+
     now = datetime.now().isoformat()
     new_comment = Comment(
         id=comment_id,
@@ -86,13 +86,13 @@ async def create_comment(request: Request, comment: CommentCreate) -> Comment:
         created_at=now,
         updated_at=now,
     )
-    
+
     # Store comment
     comments_db[comment_id] = new_comment.dict()
     threads_db.setdefault(comment.thread_id, []).append(comment_id)
-    
+
     logger.info(f"Created comment {comment_id} in thread {comment.thread_id}")
-    
+
     # Return the comment - decorator publishes it automatically!
     return new_comment
 
@@ -100,48 +100,48 @@ async def create_comment(request: Request, comment: CommentCreate) -> Comment:
 @app.put("/comments/{comment_id}", response_model=Comment)
 @sse_event(topic="comments", event="comment_updated")  # Auto-publish on update
 async def update_comment(
-    request: Request,
+    _request: Request,
     comment_id: str,
     comment_update: CommentUpdate
 ) -> Comment:
     """
     Update a comment.
-    
+
     The @sse_event decorator handles SSE publishing automatically.
     """
     if comment_id not in comments_db:
         raise HTTPException(status_code=404, detail="Comment not found")
-    
+
     # Update comment
     comments_db[comment_id]["content"] = comment_update.content
     comments_db[comment_id]["updated_at"] = datetime.now().isoformat()
-    
+
     updated_comment = Comment(**comments_db[comment_id])
     logger.info(f"Updated comment {comment_id}")
-    
+
     return updated_comment
 
 
 @app.delete("/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
 @sse_event(topic="comments", event="comment_deleted")
-async def delete_comment(request: Request, comment_id: str) -> dict:
+async def delete_comment(_request: Request, comment_id: str) -> dict:
     """
     Delete a comment.
-    
+
     Returns a dict for the SSE event (won't be in HTTP response due to 204).
     """
     if comment_id not in comments_db:
         raise HTTPException(status_code=404, detail="Comment not found")
-    
+
     # Get thread_id before deleting
     thread_id = comments_db[comment_id]["thread_id"]
-    
+
     # Delete comment
     del comments_db[comment_id]
     threads_db[thread_id] = [cid for cid in threads_db[thread_id] if cid != comment_id]
-    
+
     logger.info(f"Deleted comment {comment_id}")
-    
+
     # Return data for SSE event
     return {"comment_id": comment_id, "thread_id": thread_id}
 
@@ -151,7 +151,7 @@ async def get_comment(comment_id: str) -> Comment:
     """Get a single comment (no SSE event)."""
     if comment_id not in comments_db:
         raise HTTPException(status_code=404, detail="Comment not found")
-    
+
     return Comment(**comments_db[comment_id])
 
 
@@ -172,13 +172,13 @@ async def get_thread_comments(thread_id: int) -> list[Comment]:
 async def events(request: Request):
     """
     SSE endpoint for real-time updates.
-    
+
     The @sse_endpoint decorator handles all the SSE complexity:
     - Subscription management
     - Event streaming
     - Heartbeat
     - Connection handling
-    
+
     No manual code needed!
     """
     pass  # Decorator does everything!
@@ -190,14 +190,14 @@ async def events(request: Request):
 async def events_dynamic(request: Request):
     """
     SSE endpoint with dynamic topic subscription.
-    
+
     Usage: GET /events/dynamic?topic=comments,users
     """
     pass
 
 
 # With authorization
-async def authorize_topic(request: Request, topic: str) -> bool:
+async def authorize_topic(_request: Request, topic: str) -> bool:
     """Check if user can access topic."""
     # In production: check JWT, permissions, etc.
     logger.info(f"Authorizing topic: {topic}")
@@ -258,14 +258,14 @@ async def shutdown():
 @app.post("/comments")
 async def create_comment(comment: CommentCreate):
     new_comment = create_comment_logic(comment)
-    
+
     # Manual publish
     await broker.publish(
         topic=f"comment_thread:{comment.thread_id}",
         event="comment_created",
         data=new_comment.dict()
     )
-    
+
     return new_comment
 
 # 7. Manual SSE endpoint creation

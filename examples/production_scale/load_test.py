@@ -7,7 +7,6 @@ Tests concurrent connections and message throughput
 import asyncio
 import time
 from dataclasses import dataclass
-from typing import Dict
 
 import aiohttp
 
@@ -46,18 +45,18 @@ class LoadTestResults:
         print("LOAD TEST RESULTS")
         print("=" * 60)
         print(f"Duration: {self.duration_seconds:.1f}s")
-        print(f"\nConnections:")
+        print("\nConnections:")
         print(f"  Established: {self.connections_established}")
         print(f"  Failed: {self.connections_failed}")
         print(f"  Success Rate: {self.connections_established / (self.connections_established + self.connections_failed) * 100:.1f}%")
-        print(f"\nMessages:")
+        print("\nMessages:")
         print(f"  Published: {self.messages_published}")
         print(f"  Received: {self.messages_received}")
         print(f"  Publish Errors: {self.publish_errors}")
-        print(f"\nLatency:")
+        print("\nLatency:")
         print(f"  Average: {self.avg_latency_ms:.2f}ms")
         print(f"  Maximum: {self.max_latency_ms:.2f}ms")
-        print(f"\nThroughput:")
+        print("\nThroughput:")
         print(f"  Messages/sec: {self.messages_received / self.duration_seconds:.1f}")
         print(f"  Per Connection: {self.messages_received / max(1, self.connections_established):.1f}")
         print("=" * 60)
@@ -85,23 +84,22 @@ class SSEClient:
 
         try:
             timeout = aiohttp.ClientTimeout(total=duration + 10)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(url) as response:
-                    if response.status != 200:
-                        self.results.connections_failed += 1
-                        return
+            async with aiohttp.ClientSession(timeout=timeout) as session, session.get(url) as response:
+                if response.status != 200:
+                    self.results.connections_failed += 1
+                    return
 
-                    self.results.connections_established += 1
+                self.results.connections_established += 1
 
-                    start_time = time.time()
-                    async for line in response.content:
-                        if time.time() - start_time > duration:
-                            break
+                start_time = time.time()
+                async for line in response.content:
+                    if time.time() - start_time > duration:
+                        break
 
-                        line = line.decode("utf-8").strip()
-                        if line.startswith("data: "):
-                            self.messages_received += 1
-                            self.results.messages_received += 1
+                    line = line.decode("utf-8").strip()
+                    if line.startswith("data: "):
+                        self.messages_received += 1
+                        self.results.messages_received += 1
 
         except asyncio.TimeoutError:
             pass  # Expected after test duration
@@ -167,7 +165,7 @@ async def run_load_test(config: LoadTestConfig) -> LoadTestResults:
     """Run the load test."""
     results = LoadTestResults()
 
-    print(f"\n🚀 Starting Load Test")
+    print("\n🚀 Starting Load Test")
     print(f"   Target: {config.base_url}")
     print(f"   Connections: {config.num_connections}")
     print(f"   Duration: {config.test_duration_seconds}s")
@@ -229,21 +227,19 @@ async def run_load_test(config: LoadTestConfig) -> LoadTestResults:
 async def check_health(base_url: str) -> bool:
     """Check if server is healthy."""
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"{base_url}/health") as response:
-                return response.status == 200
+        async with aiohttp.ClientSession() as session, session.get(f"{base_url}/health") as response:
+            return response.status == 200
     except Exception as e:
         print(f"Health check failed: {e}")
         return False
 
 
-async def get_metrics(base_url: str) -> Dict:
+async def get_metrics(base_url: str) -> dict:
     """Get current metrics from server."""
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"{base_url}/metrics") as response:
-                if response.status == 200:
-                    return await response.json()
+        async with aiohttp.ClientSession() as session, session.get(f"{base_url}/metrics") as response:
+            if response.status == 200:
+                return await response.json()
     except Exception:
         pass
     return {}
@@ -305,7 +301,7 @@ async def main():
     # Get initial metrics
     initial_metrics = await get_metrics(config.base_url)
     if initial_metrics:
-        print(f"\n📊 Initial Metrics:")
+        print("\n📊 Initial Metrics:")
         print(f"   Connections: {initial_metrics.get('connections', {}).get('current', 0)}")
         print(f"   Active Topics: {initial_metrics.get('topics', {}).get('active', 0)}")
 
@@ -318,7 +314,7 @@ async def main():
     # Get final metrics
     final_metrics = await get_metrics(config.base_url)
     if final_metrics:
-        print(f"\n📊 Final Metrics:")
+        print("\n📊 Final Metrics:")
         print(f"   Connections: {final_metrics.get('connections', {}).get('current', 0)}")
         print(f"   Total Connections: {final_metrics.get('connections', {}).get('total', 0)}")
         print(f"   Rejected: {final_metrics.get('connections', {}).get('rejected', 0)}")

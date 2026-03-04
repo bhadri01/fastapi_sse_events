@@ -1,7 +1,7 @@
 """Pytest configuration and shared fixtures."""
 
 import asyncio
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest

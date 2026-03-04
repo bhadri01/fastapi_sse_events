@@ -62,16 +62,16 @@ async def root():
 
 @app.post("/comments")
 @publish_event(topic="comments", event="created")
-async def create_comment(request: Request, comment: CommentCreate) -> Comment:
+async def create_comment(_request: Request, comment: CommentCreate) -> Comment:
     """
     Create a comment.
-    
+
     The @publish_event decorator automatically publishes SSE event!
     No manual broker.publish() needed. Just return the data.
     """
     global comment_id
     comment_id += 1
-    
+
     new_comment = Comment(
         id=comment_id,
         thread_id=comment.thread_id,
@@ -79,9 +79,9 @@ async def create_comment(request: Request, comment: CommentCreate) -> Comment:
         content=comment.content,
         created_at=datetime.utcnow().isoformat(),
     )
-    
+
     comments[comment_id] = new_comment
-    
+
     # Simply return - decorator handles SSE publishing automatically!
     return new_comment
 
@@ -97,7 +97,7 @@ async def list_comments():
 async def events_endpoint(request: Request):
     """
     SSE endpoint.
-    
+
     The @subscribe_to_events decorator handles all the SSE streaming!
     Usage: /events?topic=comments
     """

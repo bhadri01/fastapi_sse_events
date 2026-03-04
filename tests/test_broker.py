@@ -57,7 +57,7 @@ async def test_subscribe_redis_messages(config: RealtimeConfig, mock_redis_backe
     broker = EventBroker(config, mock_redis_backend)
 
     # Mock Redis subscription to yield messages
-    async def mock_subscribe(topics):
+    async def mock_subscribe(_topics):
         event_data = EventData(event="test_event", data={"key": "value"}, id="123")
         yield ("test:test_topic", event_data.model_dump_json())
 
@@ -84,7 +84,7 @@ async def test_heartbeat_generation(config: RealtimeConfig, mock_redis_backend: 
     broker = EventBroker(config, mock_redis_backend)
 
     # Mock empty Redis subscription
-    async def mock_subscribe(topics):
+    async def mock_subscribe(_topics):
         # Yield nothing (wait for heartbeat)
         await asyncio.sleep(10)
         yield ("", "")

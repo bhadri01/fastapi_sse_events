@@ -7,13 +7,12 @@ import pytest
 from fastapi import FastAPI, Request, status
 
 from fastapi_sse_events.broker import EventBroker
-from fastapi_sse_events.config import RealtimeConfig
 from fastapi_sse_events.sse import create_sse_endpoint
 
 
 @pytest.mark.asyncio
 async def test_sse_endpoint_missing_topic(
-    fastapi_app: FastAPI,
+    _fastapi_app: FastAPI,
     event_broker: EventBroker,
     mock_request: Request,
 ):
@@ -37,7 +36,7 @@ async def test_sse_endpoint_unauthorized(
 ):
     """Test SSE endpoint with unauthorized access."""
     # Authorization function that denies access
-    async def deny_all(request: Request, topic: str) -> bool:
+    async def deny_all(_request: Request, _topic: str) -> bool:
         return False
 
     sse_handler = create_sse_endpoint(event_broker, authorize_fn=deny_all)
@@ -53,15 +52,15 @@ async def test_sse_endpoint_unauthorized(
 async def test_sse_endpoint_authorized(
     event_broker: EventBroker,
     mock_request: Request,
-    mock_redis_backend: AsyncMock,
+    _mock_redis_backend: AsyncMock,
 ):
     """Test SSE endpoint with authorized access."""
     # Authorization function that allows access
-    async def allow_all(request: Request, topic: str) -> bool:
+    async def allow_all(_request: Request, _topic: str) -> bool:
         return True
 
     # Mock broker subscription
-    async def mock_subscribe(topics):
+    async def mock_subscribe(_topics):
         yield "event: test\ndata: {}\n\n"
 
     event_broker.subscribe = AsyncMock(return_value=mock_subscribe([]))
@@ -81,7 +80,7 @@ async def test_sse_endpoint_multiple_topics(
     mock_request: Request,
 ):
     """Test SSE endpoint with multiple topics."""
-    async def allow_all(request: Request, topic: str) -> bool:
+    async def allow_all(_request: Request, _topic: str) -> bool:
         return True
 
     async def mock_subscribe(topics):
@@ -106,7 +105,7 @@ async def test_sse_endpoint_client_disconnect(
     mock_request: Request,
 ):
     """Test SSE endpoint handling client disconnect."""
-    async def allow_all(request: Request, topic: str) -> bool:
+    async def allow_all(_request: Request, _topic: str) -> bool:
         return True
 
     # Simulate client disconnect after first message
@@ -120,7 +119,7 @@ async def test_sse_endpoint_client_disconnect(
     mock_request.is_disconnected = mock_is_disconnected
 
     # Mock broker subscription with multiple messages
-    async def mock_subscribe(topics):
+    async def mock_subscribe(_topics):
         for i in range(5):
             yield f"event: test{i}\ndata: {{}}\n\n"
             await asyncio.sleep(0.01)
@@ -145,7 +144,7 @@ async def test_sse_endpoint_no_authorization(
     mock_request: Request,
 ):
     """Test SSE endpoint without authorization function."""
-    async def mock_subscribe(topics):
+    async def mock_subscribe(_topics):
         yield "event: test\ndata: {}\n\n"
 
     event_broker.subscribe = AsyncMock(return_value=mock_subscribe([]))

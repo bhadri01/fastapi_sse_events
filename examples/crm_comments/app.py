@@ -22,11 +22,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from fastapi_sse_events import (
-    mount_sse,
     RealtimeConfig,
     TopicBuilder,
+    mount_sse,
     publish_event,
-    subscribe_to_events,
 )
 
 # Load environment variables from .env file
@@ -97,7 +96,7 @@ class Thread(BaseModel):
 
 
 # Authorization function for SSE topics
-async def authorize_topic(request: Request, topic: str) -> bool:
+async def authorize_topic(_request: Request, topic: str) -> bool:
     """
     Authorize access to SSE topics.
 
@@ -182,7 +181,7 @@ async def get_thread_comments(thread_id: int):
         "timestamp": result.created_at,
     }
 )
-async def create_comment(request: Request, thread_id: int, comment: CommentCreate):
+async def create_comment(_request: Request, thread_id: int, comment: CommentCreate):
     """Create a new comment and notify subscribers via SSE (automatic via decorator)."""
     global comment_id_counter
 
@@ -225,7 +224,7 @@ async def create_comment(request: Request, thread_id: int, comment: CommentCreat
         "timestamp": result.updated_at,
     }
 )
-async def update_comment(request: Request, comment_id: str, comment_update: CommentUpdate):
+async def update_comment(_request: Request, comment_id: str, comment_update: CommentUpdate):
     """Update a comment and notify subscribers via SSE (automatic via decorator)."""
     if comment_id not in comments_db:
         raise HTTPException(
@@ -253,7 +252,7 @@ async def update_comment(request: Request, comment_id: str, comment_update: Comm
         "timestamp": result["timestamp"],
     }
 )
-async def delete_comment(request: Request, comment_id: str):
+async def delete_comment(_request: Request, comment_id: str):
     """Delete a comment and notify subscribers via SSE (automatic via decorator)."""
     if comment_id not in comments_db:
         raise HTTPException(

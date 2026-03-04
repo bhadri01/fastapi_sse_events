@@ -6,7 +6,7 @@ import pytest
 from fastapi import FastAPI, Request
 from httpx import AsyncClient
 
-from fastapi_sse_events import mount_sse, RealtimeConfig
+from fastapi_sse_events import RealtimeConfig, mount_sse
 from fastapi_sse_events.helpers import TopicBuilder
 
 
@@ -38,7 +38,7 @@ async def test_mount_sse_with_authorization():
     """Test mounting SSE with authorization function."""
     app = FastAPI()
 
-    async def custom_authorize(request: Request, topic: str) -> bool:
+    async def custom_authorize(_request: Request, topic: str) -> bool:
         # Custom authorization logic
         return topic.startswith("allowed_")
 
@@ -133,7 +133,7 @@ async def test_application_startup_shutdown():
         mount_sse(app)
 
         # Simulate startup
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(app=app, base_url="http://test"):
             # Client context manager triggers startup/shutdown
             pass
 

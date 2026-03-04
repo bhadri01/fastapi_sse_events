@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import Callable
+from collections.abc import Callable
 
 from fastapi import HTTPException, Request, status
 from sse_starlette.sse import EventSourceResponse
@@ -76,9 +76,9 @@ def create_sse_endpoint(
                     *[authorize_fn(request, topic_name) for topic_name in topics],
                     return_exceptions=True
                 )
-                
+
                 # Check results
-                for topic_name, result in zip(topics, auth_results):
+                for topic_name, result in zip(topics, auth_results, strict=False):
                     if isinstance(result, Exception):
                         logger.error("Authorization check failed for %s: %s", topic_name, result)
                         raise HTTPException(
@@ -102,7 +102,7 @@ def create_sse_endpoint(
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail="Authorization failed",
-                )
+                ) from e
 
         logger.info(
             "SSE connection established for topics: %s from %s",
@@ -124,13 +124,13 @@ def create_sse_endpoint(
             except RuntimeError as e:
                 if "Maximum concurrent connections exceeded" in str(e):
                     logger.warning("Connection limit reached for topics: %s", topics)
-                    yield f"event: error\ndata: {{'message': 'Server connection limit reached. Try again later.'}}\n\n"
+                    yield "event: error\ndata: {'message': 'Server connection limit reached. Try again later.'}\n\n"
                 else:
                     logger.error("Runtime error in SSE stream: %s", e)
-                    yield f"event: error\ndata: {{'message': 'Stream error'}}\n\n"
+                    yield "event: error\ndata: {'message': 'Stream error'}\n\n"
             except Exception as e:
                 logger.error("Error in SSE event stream: %s", e)
-                yield f"event: error\ndata: {{'message': 'Stream error'}}\n\n"
+                yield "event: error\ndata: {'message': 'Stream error'}\n\n"
 
             finally:
                 logger.info("SSE connection closed for topics: %s", topics)

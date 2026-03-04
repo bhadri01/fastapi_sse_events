@@ -60,24 +60,24 @@ async def root():
     <body>
         <h1>FastAPI SSE Quick Start</h1>
         <p>Create tasks and see real-time updates via Server-Sent Events!</p>
-        
+
         <form id="taskForm">
             <input type="text" id="title" placeholder="Task title" required />
             <input type="text" id="description" placeholder="Task description" />
             <button type="submit">Create Task</button>
         </form>
-        
+
         <h2>Connected Tasks:</h2>
         <div id="tasks"></div>
-        
+
         <h2>Live Events:</h2>
         <div id="messages"></div>
-        
+
         <script>
             // ===== SETUP =====
             const messagesDiv = document.getElementById('messages');
             const tasksDiv = document.getElementById('tasks');
-            
+
             // ===== HELPER FUNCTIONS =====
             function addMessage(msg) {
                 console.log('💬 Adding message:', msg);
@@ -86,7 +86,7 @@ async def root():
                 messagesDiv.appendChild(p);
                 messagesDiv.scrollTop = messagesDiv.scrollHeight;
             }
-            
+
             function addTaskToUI(task) {
                 console.log('🎨 Adding task to UI:', task);
                 const taskDiv = document.createElement('div');
@@ -98,7 +98,7 @@ async def root():
                 `;
                 tasksDiv.appendChild(taskDiv);
             }
-            
+
             function updateTaskInUI(task) {
                 console.log('🎨 Updating task in UI:', task);
                 const existingTask = document.getElementById(`task-${task.id}`);
@@ -111,12 +111,12 @@ async def root():
                     addTaskToUI(task);
                 }
             }
-            
+
             // ===== SSE EVENT HANDLERS =====
             function handleTaskCreated(event) {
                 console.log('🔥🔥🔥 HANDLING task:created 🔥🔥🔥');
                 console.log('Event data:', event.data);
-                
+
                 let eventData;
                 try {
                     eventData = JSON.parse(event.data);
@@ -124,15 +124,15 @@ async def root():
                     console.error('❌ Parse error:', e);
                     return;
                 }
-                
+
                 const taskId = eventData.id;
                 console.log('Task ID:', taskId);
-                
+
                 if (!taskId) {
                     console.error('❌ No task ID');
                     return;
                 }
-                
+
                 console.log('🚀 FETCHING /tasks/' + taskId);
                 fetch(`/tasks/${taskId}`)
                     .then(r => {
@@ -150,7 +150,7 @@ async def root():
                         addMessage(`❌ Error: ${e}`);
                     });
             }
-            
+
             function handleTaskUpdated(event) {
                 console.log('🔥🔥🔥 HANDLING task:updated 🔥🔥🔥');
                 let eventData;
@@ -160,7 +160,7 @@ async def root():
                     console.error('❌ Parse error:', e);
                     return;
                 }
-                
+
                 const taskId = eventData.id;
                 fetch(`/tasks/${taskId}`)
                     .then(r => {
@@ -177,7 +177,7 @@ async def root():
                         addMessage(`❌ Error: ${e}`);
                     });
             }
-            
+
             function handleTaskDeleted(event) {
                 console.log('🔥🔥🔥 HANDLING task:deleted 🔥🔥🔥');
                 let eventData;
@@ -187,7 +187,7 @@ async def root():
                     console.error('❌ Parse error:', e);
                     return;
                 }
-                
+
                 const taskId = eventData.id;
                 fetch('/tasks')
                     .then(r => {
@@ -207,50 +207,50 @@ async def root():
                         addMessage(`❌ Error: ${e}`);
                     });
             }
-            
+
             // ===== INITIALIZE SSE =====
             console.log('🔌 Creating EventSource...');
             const eventSource = new EventSource('/events?topic=tasks');
-            
+
             eventSource.onopen = function() {
                 console.log('🟢 SSE CONNECTED');
                 addMessage('✅ Connected to real-time updates');
             };
-            
+
             eventSource.onerror = function(e) {
                 console.error('🔴 SSE ERROR:', e);
                 addMessage('❌ Connection error');
             };
-            
+
             // Catch all message events for debugging
             eventSource.addEventListener('message', (e) => {
                 console.log('📢 Generic message received (this means SSE event parsing failed)');
                 console.log('Raw data:', e.data.substring(0, 100));
             });
-            
+
             // Attach event listeners
             console.log('Attaching event listeners...');
             eventSource.addEventListener('task:created', handleTaskCreated);
             eventSource.addEventListener('task:updated', handleTaskUpdated);
             eventSource.addEventListener('task:deleted', handleTaskDeleted);
             console.log('✅ Event listeners attached');
-            
+
             // ===== FORM HANDLER =====
             document.getElementById('taskForm').addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const title = document.getElementById('title').value;
                 const description = document.getElementById('description').value;
-                
+
                 console.log('📤 Submitting:', title);
                 addMessage(`📤 Creating task...`);
-                
+
                 try {
                     const response = await fetch('/tasks', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ title, description })
                     });
-                    
+
                     if (response.ok) {
                         console.log('✅ Task submitted');
                         document.getElementById('title').value = '';
@@ -264,7 +264,7 @@ async def root():
                     addMessage(`❌ Request failed`);
                 }
             });
-            
+
             // ===== LOAD INITIAL TASKS =====
             console.log('📥 Loading initial tasks...');
             fetch('/tasks')
@@ -315,10 +315,10 @@ async def test_page():
             <button onclick="testSSE()">Test SSE (click here)</button>
             <div id="output"></div>
         </div>
-        
+
         <script>
             const output = document.getElementById('output');
-            
+
             function log(msg, type = 'info') {
                 const div = document.createElement('div');
                 div.className = 'log ' + type;
@@ -327,29 +327,29 @@ async def test_page():
                 output.scrollTop = output.scrollHeight;
                 console.log(`[${type}]`, msg);
             }
-            
+
             function testSSE() {
                 log('🔌 Creating EventSource to /test-sse...', 'info');
                 const es = new EventSource('/test-sse');
-                
+
                 es.onopen = function() {
                     log('✅ Connection opened!', 'success');
                 };
-                
+
                 es.addEventListener('test:event', (e) => {
                     log('🎯 Received test:event: ' + e.data, 'success');
                 });
-                
+
                 es.addEventListener('message', (e) => {
                     log('📢 Received message event: ' + e.data.substring(0, 50) + '...', 'info');
                 });
-                
+
                 es.onerror = function(e) {
                     log('❌ Error: ' + e, 'error');
                     log('ReadyState: ' + es.readyState, 'error');
                     es.close();
                 };
-                
+
                 setTimeout(() => {
                     log('Closing connection...', 'info');
                     es.close();
@@ -362,11 +362,12 @@ async def test_page():
 
 
 @app.get("/test-sse")
-async def test_sse(request: Request):
+async def test_sse(_request: Request):
     """Test endpoint to verify SSE is working correctly."""
-    from fastapi.responses import StreamingResponse
     import asyncio
-    
+
+    from fastapi.responses import StreamingResponse
+
     async def generate():
         # Test 1: Send raw SSE message
         message = """event: test:event
@@ -377,7 +378,7 @@ id: test-1
         print(f"Backend sending test message:\n{repr(message)}")
         yield message
         await asyncio.sleep(1)
-    
+
     return StreamingResponse(
         generate(),
         media_type="text/event-stream",
@@ -390,10 +391,10 @@ id: test-1
 
 @app.post("/tasks", response_model=Task)
 @publish_event(topic="tasks", event="task:created")
-async def create_task(request: Request, task: TaskCreate):
+async def create_task(_request: Request, task: TaskCreate):
     """
     Create a task.
-    
+
     THE SIMPLIFIED WAY: Just use the @publish_event decorator!
     - Your endpoint returns data
     - Decorator automatically publishes it as SSE event
@@ -401,12 +402,12 @@ async def create_task(request: Request, task: TaskCreate):
     """
     global task_counter
     task_counter += 1
-    
+
     new_task = Task(id=task_counter, title=task.title, description=task.description)
     tasks[task_counter] = new_task
-    
+
     print(f"📤 [create_task] Publishing event - ID: {new_task.id}, Title: {new_task.title}")
-    
+
     # Simply return - decorator handles SSE publishing automatically!
     return new_task
 
@@ -430,33 +431,33 @@ async def get_task(task_id: int):
 
 @app.put("/tasks/{task_id}", response_model=Task)
 @publish_event(topic="tasks", event="task:updated")
-async def update_task(request: Request, task_id: int, task_update: TaskCreate):
+async def update_task(_request: Request, task_id: int, task_update: TaskCreate):
     """
     Update a task and notify subscribers with decorator.
     """
     if task_id not in tasks:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Task not found")
-    
+
     task = Task(id=task_id, title=task_update.title, description=task_update.description)
     tasks[task_id] = task
-    
+
     # Decorator automatically publishes this!
     return task
 
 
 @app.delete("/tasks/{task_id}")
 @publish_event(topic="tasks", event="task:deleted")
-async def delete_task(request: Request, task_id: int):
+async def delete_task(_request: Request, task_id: int):
     """
     Delete a task and notify subscribers with decorator.
     """
     if task_id not in tasks:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Task not found")
-    
+
     deleted = tasks.pop(task_id)
-    
+
     # Decorator automatically publishes this!
     return deleted
 
@@ -466,7 +467,7 @@ async def delete_task(request: Request, task_id: int):
 async def events_endpoint(request: Request):
     """
     SSE streaming endpoint.
-    
+
     THE SIMPLIFIED WAY: Just use the @subscribe_to_events decorator!
     - Gets topics from query parameter: ?topic=tasks
     - Decorator handles all streaming logic automatically
