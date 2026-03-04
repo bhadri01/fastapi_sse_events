@@ -101,7 +101,7 @@ class SSEApp(FastAPI):
             )
         
         # Create broker
-        redis_backend = RedisBackend(config)
+        redis_backend = RedisBackend(config.redis_url)
         self.state.broker = EventBroker(config, redis_backend)
         logger.info("EventBroker configured and attached to app state")
         

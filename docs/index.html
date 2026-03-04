@@ -130,7 +130,7 @@
                 <section class="hero">
                     <div class="hero-badge">
                         <i class="fas fa-bolt"></i>
-                        <span>v0.1.0</span>
+                        <span>v0.2.0</span>
                     </div>
                     <h1 class="hero-title">FastAPI SSE Events</h1>
                     <p class="hero-subtitle">
@@ -381,7 +381,7 @@ eventSource.addEventListener('open', () => {
 
                     <div class="hero-badge" style="margin-bottom: 1rem;">
                         <i class="fas fa-star"></i>
-                        <span>New in v0.1.0</span>
+                        <span>Recommended Approach</span>
                     </div>
 
                     <p>
@@ -390,6 +390,13 @@ eventSource.addEventListener('open', () => {
                         It provides auto-configuration, automatic event publishing via decorators, and automatic SSE
                         streaming.
                     </p>
+                    
+                    <div class="info-card">
+                        <h4><i class="fas fa-info-circle"></i> Naming Conventions</h4>
+                        <p><strong>Current Names (Recommended):</strong> <code>@publish_event</code>, <code>@subscribe_to_events</code></p>
+                        <p><strong>Legacy Aliases (Still Supported):</strong> <code>@sse_event</code>, <code>@sse_endpoint</code></p>
+                        <p>Both naming conventions work interchangeably. For new projects, use the current names.</p>
+                    </div>
 
                     <div class="feature-grid">
                         <div class="feature-card">
@@ -439,7 +446,7 @@ app = SSEApp(
 # That's it! No manual broker setup, no lifecycle management needed!</code></pre>
                     </div>
 
-                    <h4><strong>Step 2:</strong> Use @sse_event Decorator</h4>
+                    <h4><strong>Step 2:</strong> Use @publish_event Decorator</h4>
                     <p>Automatically publish events when endpoints return:</p>
 
                     <div class="code-block">
@@ -451,7 +458,7 @@ app = SSEApp(
                             </button>
                         </div>
                         <pre><code class="language-python">@app.post("/comments")
-@sse_event(topic="comments", event="comment_created")
+@publish_event(topic="comments", event="comment_created")
 async def create_comment(request: Request, comment: dict):
     # Your business logic here
     new_comment = {"id": 1, "content": comment["content"]}
@@ -460,7 +467,7 @@ async def create_comment(request: Request, comment: dict):
     return new_comment</code></pre>
                     </div>
 
-                    <h4><strong>Step 3:</strong> Use @sse_endpoint Decorator</h4>
+                    <h4><strong>Step 3:</strong> Use @subscribe_to_events Decorator</h4>
                     <p>Create SSE streaming endpoints with zero boilerplate:</p>
 
                     <div class="code-block">
@@ -472,7 +479,7 @@ async def create_comment(request: Request, comment: dict):
                             </button>
                         </div>
                         <pre><code class="language-python">@app.get("/events")
-@sse_endpoint(topics=["comments"])
+@subscribe_to_events()
 async def events(request: Request):
     pass  # Decorator handles all streaming logic!</code></pre>
                     </div>
@@ -540,13 +547,13 @@ app = SSEApp(
                         </ul>
                     </div>
 
-                    <h3 class="subsection-title"><i class="fas fa-paper-plane"></i> @sse_event - Auto-Publish Decorator
-                    </h3>
+                    <h3 class="subsection-title"><i class="fas fa-paper-plane"></i> @publish_event - Auto-Publish Decorator</h3>
 
                     <p>
-                        The <code>@sse_event</code> decorator automatically publishes your endpoint's response as an SSE
+                        The <code>@publish_event</code> decorator automatically publishes your endpoint's response as an SSE
                         event.
                         No more manual <code>broker.publish()</code> calls!
+                        <br><strong>Legacy Alias:</strong> <code>@sse_event</code> (still supported for backwards compatibility)
                     </p>
 
                     <div class="code-block">
@@ -557,23 +564,23 @@ app = SSEApp(
                                 Copy
                             </button>
                         </div>
-                        <pre><code class="language-python">from fastapi_sse_events import sse_event
+                        <pre><code class="language-python">from fastapi_sse_events import publish_event
 
 # Explicit topic and event name
 @app.post("/comments")
-@sse_event(topic="comments", event="comment_created")
+@publish_event(topic="comments", event="comment_created")
 async def create_comment(request: Request, comment: dict):
     return {"id": 1, "content": comment["content"]}
 
 # Auto-infer topic from route path
 @app.post("/threads/{thread_id}/comments")
-@sse_event()  # Auto-infers topic: "threads.comments"
+@publish_event()  # Auto-infers topic: "threads.comments"
 async def add_comment(request: Request, thread_id: int, comment: dict):
     return {"id": 1, "thread_id": thread_id, **comment}
 
 # Custom data extraction
 @app.post("/users")
-@sse_event(
+@publish_event(
     topic="users",
     extract_data=lambda resp: {"user_id": resp["id"]}  # Only publish ID
 )
@@ -629,12 +636,12 @@ async def create_user(request: Request, user: dict):
                             work. The decorator needs access to the app state to publish events.</p>
                     </div>
 
-                    <h3 class="subsection-title"><i class="fas fa-broadcast-tower"></i> @sse_endpoint - Auto-Streaming
-                        Decorator</h3>
+                    <h3 class="subsection-title"><i class="fas fa-broadcast-tower"></i> @subscribe_to_events - Auto-Streaming Decorator</h3>
 
                     <p>
-                        The <code>@sse_endpoint</code> decorator creates SSE streaming endpoints with zero boilerplate.
+                        The <code>@subscribe_to_events</code> decorator creates SSE streaming endpoints with zero boilerplate.
                         It handles subscription, event streaming, heartbeat, and connection management automatically.
+                        <br><strong>Legacy Alias:</strong> <code>@sse_endpoint</code> (still supported for backwards compatibility)
                     </p>
 
                     <div class="code-block">
@@ -2262,22 +2269,56 @@ CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]</code></pre>
                         Examples
                     </h2>
 
-                    <h3 class="subsection-title">CRM Comments Example</h3>
+                    <h3 class="subsection-title"><i class="fas fa-rocket"></i> Quick Start Example (Recommended)</h3>
                     <p>
-                        A complete working example is included in the repository at <code>examples/crm_comments/</code>.
-                        This demonstrates a multi-user comment system with real-time updates.
+                        The easiest way to get started is with the <strong>Quick Start example</strong> at <code>examples/quickstart/</code>.
+                        This demonstrates the recommended simplified API approach with minimal boilerplate.
                     </p>
 
                     <div class="info-card">
-                        <h4><i class="fas fa-folder"></i> Example Files</h4>
+                        <h4><i class="fas fa-check-circle"></i> What's Included</h4>
                         <ul>
-                            <li><code>app.py</code> - FastAPI server with CRUD + SSE</li>
-                            <li><code>client.html</code> - Beautiful web UI with EventSource</li>
-                            <li><code>start.sh</code> - Quick start script</li>
+                            <li><code>app.py</code> - Simplified API using SSEApp + decorators</li>
+                            <li>Task management API with real-time updates</li>
+                            <li>Embedded browser client (built into app)</li>
+                            <li>~60 lines of code (75% less boilerplate!)</li>
                         </ul>
                     </div>
 
-                    <h3 class="subsection-title">Running the Example</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>bash</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-bash">cd examples/quickstart
+pip install -r requirements.txt  # Or: pip install fastapi uvicorn fastapi-sse-events redis
+redis-server                      # Start Redis (or: docker run -d -p 6379:6379 redis:7-alpine)
+uvicorn app:app --reload         # Start FastAPI</code></pre>
+                    </div>
+
+                    <p>Open <code>http://localhost:8000</code> in your browser to see real-time task updates!</p>
+
+                    <hr style="margin: 2rem 0; border: none; border-top: 1px solid #404040;">
+
+                    <h3 class="subsection-title"><i class="fas fa-comments"></i> CRM Comments Example (Advanced)</h3>
+                    <p>
+                        For a more complex example with authorization and advanced patterns, see <code>examples/crm_comments/</code>.
+                        This demonstrates a multi-user comment system with role-based access control.
+                    </p>
+
+                    <div class="info-card">
+                        <h4><i class="fas fa-folder"></i> Available Versions</h4>
+                        <ul>
+                            <li><code>app.py</code> - Traditional approach with manual broker</li>
+                            <li><code>app_simple.py</code> - Simplified approach (basic decorators)</li>
+                            <li><code>app_simple_new.py</code> - Simplified approach (current decorators)</li>
+                            <li><code>client.html</code> - Beautiful web UI with EventSource</li>
+                        </ul>
+                    </div>
+
                     <div class="code-block">
                         <div class="code-header">
                             <span>bash</span>
@@ -2294,8 +2335,44 @@ pip install -r requirements.txt
 uvicorn app:app --reload</code></pre>
                     </div>
 
-                    <p>Open <code>http://localhost:8000/client.html</code> in multiple browser windows to see real-time
-                        updates!</p>
+                    <p>Open <code>http://localhost:8000/client.html</code> in multiple browser windows to see real-time updates!</p>
+
+                    <hr style="margin: 2rem 0; border: none; border-top: 1px solid #404040;">
+
+                    <h3 class="subsection-title"><i class="fas fa-server"></i> Production Scale Example</h3>
+                    <p>
+                        For deployment at scale, see <code>examples/production_scale/</code>.
+                        This includes Docker, Nginx reverse proxy, load testing, and performance benchmarks.
+                    </p>
+
+                    <div class="info-card">
+                        <h4><i class="fas fa-check-circle"></i> Production Features</h4>
+                        <ul>
+                            <li>Multi-container Docker setup (FastAPI + Redis)</li>
+                            <li>Nginx reverse proxy configuration</li>
+                            <li>Load testing script (supporting 100K+ concurrent connections)</li>
+                            <li>Prometheus monitoring setup</li>
+                            <li>Performance tuning guidelines</li>
+                        </ul>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>bash</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-bash">cd examples/production_scale
+./start.sh          # Starts all services via docker-compose
+
+# Run load tests
+pip install -r load_test_requirements.txt
+python load_test.py</code></pre>
+                    </div>
+
+                    <p>See the <code>README.md</code> in each example directory for detailed information.</p>
                 </section>
 
                 <!-- Troubleshooting -->
