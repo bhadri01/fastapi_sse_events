@@ -5,8 +5,6 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![PyPI version](https://img.shields.io/pypi/v/fastapi-sse-events.svg)](https://pypi.org/project/fastapi-sse-events/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://github.com/bhadri01/fastapi_sse_events/workflows/Tests/badge.svg)](https://github.com/bhadri01/fastapi_sse_events/actions)
-[![codecov](https://codecov.io/gh/bhadri01/fastapi_sse_events/branch/main/graph/badge.svg)](https://codecov.io/gh/bhadri01/fastapi_sse_events)
 
 **Add real-time "refresh-less" updates to your FastAPI REST API in minutes.**
 
@@ -58,7 +56,6 @@ Perfect for collaborative tools (CRMs, project management, dashboards) where mul
 - 💓 **Heartbeat Support** - Automatic connection keepalive (configurable interval)
 - 🎯 **Topic-based Routing** - Fine-grained subscription control per resource
 - 🔧 **Type Safe** - Full type hints and mypy compliance
-- ✅ **Well Tested** - Comprehensive test suite with 80%+ coverage
 
 ---
 
@@ -1296,13 +1293,6 @@ cd fastapi_sse_events
 # Install with dev dependencies
 pip install -e ".[dev]"
 
-# Run tests
-pytest tests/ -v
-
-# Run linting
-ruff check fastapi_sse_events/ tests/ examples/
-ruff format fastapi_sse_events/ tests/ examples/
-
 # Run type checking
 mypy fastapi_sse_events/
 ```
@@ -1311,12 +1301,10 @@ mypy fastapi_sse_events/
 
 1. **Fork** the repository
 2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
-3. **Add tests** for new features
-4. **Ensure** all tests pass (`pytest`)
-5. **Run** linting and formatting (`ruff`)
-6. **Commit** your changes (`git commit -m 'Add amazing feature'`)
-7. **Push** to the branch (`git push origin feature/amazing-feature`)
-8. **Open** a Pull Request
+3. **Run** type checking (`mypy`)
+4. **Commit** your changes (`git commit -m 'Add amazing feature'`)
+5. **Push** to the branch (`git push origin feature/amazing-feature`)
+6. **Open** a Pull Request
 
 ### Reporting Issues
 
