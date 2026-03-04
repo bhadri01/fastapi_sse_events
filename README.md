@@ -1,14 +1,14 @@
 # FastAPI SSE Events
 
-> Server-Sent Events (SSE) notifications for FastAPI using Redis Pub/Sub
+**v0.2.0**
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![PyPI version](https://img.shields.io/pypi/v/fastapi-sse-events.svg)](https://pypi.org/project/fastapi-sse-events/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Add real-time "refresh-less" updates to your FastAPI REST API in minutes.**
+Add real-time "refresh-less" updates to your FastAPI REST API using Server-Sent Events (SSE) and Redis Pub/Sub. Perfect for collaborative tools and dashboards.
 
-Perfect for collaborative tools (CRMs, project management, dashboards) where multiple users need to see updates instantly without manual page refreshes.
+✅ Simple Integration • ✅ Type Safe • ✅ Redis Backed • ✅ Horizontally Scalable
 
 ---
 
@@ -17,7 +17,7 @@ Perfect for collaborative tools (CRMs, project management, dashboards) where mul
 - **[Full Documentation](https://bhadri01.github.io/fastapi_sse_events)** - Complete guide with examples
 - **[PyPI Package](https://pypi.org/project/fastapi-sse-events/)** - Installation and releases
 - **[GitHub Repository](https://github.com/bhadri01/fastapi_sse_events)** - Source code and issues
-- **[Changelog](https://github.com/bhadri01/fastapi_sse_events/blob/main/CHANGELOG.md)** - Version history
+- **[Changelog](CHANGELOG.md)** - Version history
 
 ---
 
@@ -27,17 +27,25 @@ Perfect for collaborative tools (CRMs, project management, dashboards) where mul
 - [Why SSE?](#why-sse)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
-- [Core Concepts](#core-concepts)
-- [Usage Guide](#usage-guide)
-  - [Basic Integration](#basic-integration)
-  - [Publishing Events](#publishing-events)
-  - [Authorization](#authorization)
-  - [Topic Patterns](#topic-patterns)
+- [Simplified API (Recommended)](#simplified-api-recommended)
+- [Architecture](#architecture)
+- [Features](#features)
+- [How It Works](#how-it-works)
+- [Basic Integration](#basic-integration)
+- [Publishing Events](#publishing-events)
+- [Authorization](#authorization)
+- [Topic Patterns](#topic-patterns)
 - [Configuration](#configuration)
 - [Client Integration](#client-integration)
-- [Deployment](#deployment)
-- [Examples](#examples)
+  - [JavaScript Client](#javascript-client)
+  - [React Client](#react-client)
+  - [Python Client](#python-client)
+- [Production Setup](#production-setup)
+- [Nginx Configuration](#nginx-configuration)
+- [Docker Deployment](#docker-deployment)
+- [Performance Tips](#performance-tips)
 - [API Reference](#api-reference)
+- [Examples](#examples)
 - [Troubleshooting](#troubleshooting)
 - [License](#license)
 
@@ -47,169 +55,691 @@ Perfect for collaborative tools (CRMs, project management, dashboards) where mul
 
 **FastAPI SSE Events** enables near real-time notifications for REST-based applications without the complexity of WebSockets. Clients subscribe to Server-Sent Event streams for specific topics, receive lightweight notifications when data changes, then refresh data via existing REST endpoints.
 
-### Key Features
+### 💡 Perfect For
 
-- 🚀 **Simple Integration** - Add SSE with 3 lines of code, minimal changes to existing endpoints
-- 📡 **Server-Sent Events** - Lightweight, one-way communication (server → client)
-- 🔄 **Redis Pub/Sub** - Horizontal scaling across multiple API instances
-- 🔐 **Authorization Hooks** - Secure topic subscriptions with custom auth logic
-- 💓 **Heartbeat Support** - Automatic connection keepalive (configurable interval)
-- 🎯 **Topic-based Routing** - Fine-grained subscription control per resource
-- 🔧 **Type Safe** - Full type hints and mypy compliance
+- Collaborative CRM systems where sales reps see updates from teammates
+- Project management tools with real-time task updates
+- Live dashboards showing metrics and notifications
+- Multi-user editing interfaces requiring change notifications
 
 ---
 
 ## Why SSE?
 
-**Problem:** Traditional REST APIs require manual refresh to see updates from other users. This creates poor collaboration experiences and inefficient workflows.
+### The Problem
 
-**Why not WebSockets?** WebSockets are powerful but complex:
-- Require separate infrastructure
-- More difficult to debug
+Traditional REST APIs require manual refresh to see updates from other users. This creates poor collaboration experiences and inefficient workflows. Users constantly hit refresh or polling adds unnecessary server load.
+
+### Why Not WebSockets?
+
+WebSockets are powerful but come with complexity:
+
+- Require separate infrastructure and connection management
+- More difficult to debug and monitor
 - Overkill for one-way notifications
 - Don't work well with existing REST patterns
+- Harder to secure with standard auth mechanisms
 
-**SSE Solution:**
-- Built on HTTP (works with existing infrastructure)
-- Native browser support (`EventSource`)
-- Automatic reconnection
-- Perfect for "notify then fetch" pattern
-- Keeps REST as source of truth
+### The SSE Solution
+
+#### HTTP Based
+Works with existing infrastructure - no special proxying or routing needed.
+
+#### Native Browser Support
+Built-in `EventSource` API in all modern browsers with automatic reconnection.
+
+#### One-Way Communication
+Perfect for notifications - server pushes updates, client remains stateless.
+
+#### REST as Source of Truth
+SSE notifies, REST endpoints provide data - clean separation of concerns.
 
 ---
 
 ## Installation
 
-```bash
-pip install fastapi-sse-events
 ```
 
-**Requirements:**
+### Requirements
+
 - Python 3.10+
-- FastAPI
-- Redis server
+- FastAPI 0.104.0+
+- Redis 5.0+ (running locally or remotely)
+
+### ℹ️ Redis Setup
+
+You'll need a Redis server. Quick options:
+
+**Docker:**
+```bash
+docker run -d -p 6379:6379 redis:alpine
+```
+
+**Local Install:**
+```bash
+redis-server
+```
 
 ---
 
 ## Quick Start
 
-### 1. Install and Start Redis
+### ⭐ Recommended Flow
 
-```bash
-# Using Docker
-docker run -d -p 6379:6379 redis:alpine
+Use the **simplified decorator-based API** with `SSEApp`, `@publish_event`, and `@subscribe_to_events`. This is the current, recommended approach.
 
-# Or use local Redis
-redis-server
-```
+Get SSE running in your FastAPI app with just a few lines of code:
 
-### 2. Add to Your FastAPI App
+### 📝 1. Create Your FastAPI App
 
+**app.py:**
 ```python
 from fastapi import Request
 from fastapi_sse_events import SSEApp, publish_event, subscribe_to_events
 
 app = SSEApp(
-  title="My API",
-  redis_url="redis://localhost:6379/0",
+    title="My API",
+    redis_url="redis://localhost:6379"
 )
+
+@app.post("/tasks")
+@publish_event(topic="tasks", event="task:created")
+async def create_task(request: Request, task: dict):
+    # ... save task to database ...
+    return {"id": 1, **task}  # auto-published to SSE clients
 
 @app.get("/events")
 @subscribe_to_events()
 async def events(request: Request):
-  pass
+    pass
 ```
 
-### 3. Publish Events from Your Endpoints
+### 🌐 2. Connect from Browser
+
+**client.js:**
+```javascript
+// Subscribe to topic from query param
+const eventSource = new EventSource('/events?topic=tasks');
+
+eventSource.addEventListener('task:created', async (event) => {
+    const data = JSON.parse(event.data);
+    console.log('Task event:', data);
+
+    // Notify-then-fetch pattern (recommended)
+    const response = await fetch(`/tasks/${data.id}`);
+    const task = await response.json();
+    renderTask(task);
+});
+
+eventSource.addEventListener('open', () => {
+    console.log('✅ Connected to SSE');
+});
+```
+
+### ✅ That's It!
+
+You now have real-time notifications. Clients connect to `/events?topic=...` and receive instant updates when decorated endpoints return.
+
+---
+
+## Simplified API (Recommended)
+
+**⭐ Recommended Approach**
+
+The **simplified decorator-based API** makes adding real-time SSE events incredibly easy by eliminating 75%+ of boilerplate code. It provides auto-configuration, automatic event publishing via decorators, and automatic SSE streaming.
+
+### ℹ️ Naming Conventions
+
+**Current Names (Recommended):** `@publish_event`, `@subscribe_to_events`
+
+**Legacy Aliases (Still Supported):** `@sse_event`, `@sse_endpoint`
+
+Both naming conventions work interchangeably. For new projects, use the current names.
+
+### Key Features
+
+#### ✅ Auto-Configuration
+One-line app setup with automatic broker, Redis, and CORS configuration.
+
+#### ✨ @sse_event Decorator
+Automatically publish endpoint responses as SSE events - no manual calls needed.
+
+#### 📡 @sse_endpoint Decorator
+Create SSE streaming endpoints with one decorator - handles everything automatically.
+
+#### ⚡ 75% Less Code
+Reduce boilerplate from ~50 lines to ~10 lines. Focus on your business logic.
+
+### 🚀 Getting Started (3 Steps)
+
+#### Step 1: Create SSEApp
+
+Replace `FastAPI()` with `SSEApp()` for automatic configuration:
+
+**app.py:**
+```python
+from fastapi import Request
+from fastapi_sse_events import SSEApp, sse_event, sse_endpoint
+
+# One-line setup with auto-configuration!
+app = SSEApp(
+    title="My API",
+    redis_url="redis://localhost:6379"  # or use REDIS_URL env var
+)
+
+# That's it! No manual broker setup, no lifecycle management needed!
+```
+
+#### Step 2: Use @publish_event Decorator
+
+Automatically publish events when endpoints return:
 
 ```python
 @app.post("/comments")
 @publish_event(topic="comments", event="comment_created")
-async def create_comment(request: Request, comment: Comment):
-  # Save comment to database
-  saved_comment = await db.save(comment)
-  return saved_comment  # Auto-published to SSE clients
+async def create_comment(request: Request, comment: dict):
+    # Your business logic here
+    new_comment = {"id": 1, "content": comment["content"]}
+    
+    # Just return it - automatically published to SSE clients!
+    return new_comment
 ```
 
-### 4. Subscribe from Client
+#### Step 3: Use @subscribe_to_events Decorator
 
-```javascript
-// Connect to SSE stream
-const eventSource = new EventSource('http://localhost:8000/events?topic=comments');
+Create SSE streaming endpoints with zero boilerplate:
 
-// Handle events
-eventSource.addEventListener('comment_created', (e) => {
-  const data = JSON.parse(e.data);
-  console.log('Comment event:', data);
-
-  // Notify-then-fetch pattern (recommended)
-  fetch(`http://localhost:8000/comments/${data.id}`)
-    .then(r => r.json())
-    .then(renderComment);
-});
+```python
+@app.get("/events")
+@subscribe_to_events()
+async def events(request: Request):
+    pass  # Decorator handles all streaming logic!
 ```
 
-**That's it!** Your app now has real-time updates.
+### ✅ Complete!
+
+You now have real-time SSE with minimal code. Open the API docs at `http://localhost:8000/docs` to test it!
+
+### 📝 SSEApp - Auto-configured FastAPI
+
+`SSEApp` extends `FastAPI` and automatically configures everything needed for SSE:
+
+```python
+from fastapi_sse_events import SSEApp
+
+app = SSEApp(
+    title="My API",
+    version="1.0.0",
+    
+    # Redis connection (choose one)
+    redis_url="redis://localhost:6379",       # Option 1: URL
+    # redis_host="localhost",                  # Option 2: Host/Port
+    # redis_port=6379,
+    # redis_db=0,
+    
+    # Optional settings
+    topic_prefix="myapp:",                    # Prefix all topics
+    enable_cors=True,                         # Auto-enable CORS
+    cors_origins=["*"],                       # Allowed origins
+)
+```
+
+#### What SSEApp Does Automatically
+
+- ✅ Creates and configures `EventBroker`
+- ✅ Sets up Redis connection with Pub/Sub
+- ✅ Manages broker lifecycle (connect on startup, disconnect on shutdown)
+- ✅ Configures CORS middleware (optional)
+- ✅ Makes broker available at `app.broker` and `request.app.state.broker`
+
+#### ℹ️ Environment Variables
+
+SSEApp reads from environment variables if parameters not provided:
+
+- `REDIS_URL` - Redis connection URL
+- `REDIS_HOST` - Redis host (default: localhost)
+- `REDIS_PORT` - Redis port (default: 6379)
+- `REDIS_DB` - Redis database (default: 0)
+- `TOPIC_PREFIX` - Topic prefix (default: "")
+- `CORS_ORIGINS` - Comma-separated origins (default: *)
+
+### 📤 @publish_event - Auto-Publish Decorator
+
+The `@publish_event` decorator automatically publishes your endpoint's response as an SSE event. No more manual `broker.publish()` calls!
+
+**Legacy Alias:** `@sse_event` (still supported for backwards compatibility)
+
+```python
+from fastapi_sse_events import publish_event
+
+# Explicit topic and event name
+@app.post("/comments")
+@publish_event(topic="comments", event="comment_created")
+async def create_comment(request: Request, comment: dict):
+    return {"id": 1, "content": comment["content"]}
+
+# Auto-infer topic from route path
+@app.post("/threads/{thread_id}/comments")
+@publish_event()  # Auto-infers topic: "threads.comments"
+async def add_comment(request: Request, thread_id: int, comment: dict):
+    return {"id": 1, "thread_id": thread_id, **comment}
+
+# Custom data extraction
+@app.post("/users")
+@publish_event(
+    topic="users",
+    extract_data=lambda resp: {"user_id": resp["id"]}  # Only publish ID
+)
+async def create_user(request: Request, user: dict):
+    full_user = {"id": 1, "password": "secret", **user}
+    return full_user  # Only {"user_id": 1} published to SSE
+```
+
+#### Decorator Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `topic` | str \| None | Topic to publish to. Auto-inferred from route if None. |
+| `event` | str \| None | Event name. Uses function name if None. |
+| `extract_data` | Callable \| None | Function to transform response before publishing. |
+| `auto_topic` | bool | Auto-generate topic from route path (default: True). |
+
+#### Auto-Topic Inference
+
+When `topic` is not provided, the decorator infers it from the route path:
+
+- `/comments` → `comments`
+- `/threads/123/comments` → `threads.comments`
+- `/api/v1/users/456` → `users` (filters out "api", "v1", IDs)
+
+#### ⚠️ Important
+
+You must add `request: Request` parameter to your endpoint for the decorator to work. The decorator needs access to the app state to publish events.
+
+### 📡 @subscribe_to_events - Auto-Streaming Decorator
+
+The `@subscribe_to_events` decorator creates SSE streaming endpoints with zero boilerplate. It handles subscription, event streaming, heartbeat, and connection management automatically.
+
+**Legacy Alias:** `@sse_endpoint` (still supported for backwards compatibility)
+
+```python
+from fastapi_sse_events import sse_endpoint
+
+# Simple SSE endpoint with static topics
+@app.get("/events")
+@sse_endpoint(topics=["comments", "users"])
+async def events(request: Request):
+    pass  # Decorator handles everything!
+
+# Dynamic topics from query params
+@app.get("/events/dynamic")
+@sse_endpoint()  # Topics from ?topic=comments,users
+async def events_dynamic(request: Request):
+    pass
+
+# With authorization
+async def check_auth(request: Request, topic: str) -> bool:
+    user = await get_current_user(request)
+    return user.can_access(topic)
+
+@app.get("/events/secure")
+@sse_endpoint(topics=["comments"], authorize=check_auth)
+async def events_secure(request: Request):
+    pass
+
+# Custom heartbeat
+@app.get("/events/fast")
+@sse_endpoint(topics=["live-data"], heartbeat=10)  # 10 second heartbeat
+async def events_fast(request: Request):
+    pass
+```
+
+#### Decorator Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `topics` | list[str] \| None | Topics to subscribe to. Uses query param if None. |
+| `authorize` | Callable \| None | Authorization function `(request, topic) → bool`. |
+| `heartbeat` | int | Heartbeat interval in seconds (default: 30, 0 to disable). |
+
+### ⚖️ Before vs After Comparison
+
+#### ❌ Before (Manual API) - ~50 lines
+
+```python
+from fastapi import FastAPI
+from fastapi_sse_events import (
+    EventBroker, RealtimeConfig,
+    RedisBackend, mount_sse
+)
+
+app = FastAPI()
+
+# Manual configuration
+config = RealtimeConfig(
+    redis_url="redis://localhost:6379"
+)
+redis_backend = RedisBackend(config)
+broker = EventBroker(config, redis_backend)
+
+# Manual lifecycle
+@app.on_event("startup")
+async def startup():
+    await redis_backend.connect()
+
+@app.on_event("shutdown")
+async def shutdown():
+    await redis_backend.disconnect()
+
+# Manual publishing
+@app.post("/comments")
+async def create_comment(comment: dict):
+    new_comment = {"id": 1, **comment}
+    
+    # Manual broker call
+    await broker.publish(
+        topic="comments",
+        event="comment_created",
+        data=new_comment
+    )
+    
+    return new_comment
+
+# Manual SSE endpoint
+mount_sse(app, broker)
+```
+
+#### ✅ After (Simplified API) - ~10 lines
+
+```python
+from fastapi import Request
+from fastapi_sse_events import (
+    SSEApp, sse_event, sse_endpoint
+)
+
+# One-line setup!
+app = SSEApp(
+    redis_url="redis://localhost:6379"
+)
+
+# Auto-publishing
+@app.post("/comments")
+@sse_event(topic="comments")
+async def create_comment(
+    request: Request,
+    comment: dict
+):
+    new_comment = {"id": 1, **comment}
+    return new_comment  # Auto-published!
+
+# Auto-streaming
+@app.get("/events")
+@sse_endpoint(topics=["comments"])
+async def events(request: Request):
+    pass  # All automatic!
+```
+
+### 📈 80% Reduction in Boilerplate
+
+The simplified API reduces setup from ~50 lines to ~10 lines, letting you focus on your business logic instead of configuration.
+
+### 🔄 Migration from Manual API
+
+Migrating to the simplified API is straightforward and can be done gradually:
+
+#### Step 1: Replace FastAPI with SSEApp
+
+```python
+# Before
+app = FastAPI()
+config = RealtimeConfig(redis_url="...")
+# ... manual setup ...
+
+# After
+app = SSEApp(redis_url="...")
+```
+
+#### Step 2: Add Decorators
+
+```python
+# Before
+@app.post("/comments")
+async def create_comment(comment: dict):
+    new_comment = save(comment)
+    await broker.publish("comments", "created", new_comment)
+    return new_comment
+
+# After
+@app.post("/comments")
+@sse_event(topic="comments", event="created")
+async def create_comment(request: Request, comment: dict):
+    new_comment = save(comment)
+    return new_comment  # Auto-published!
+```
+
+#### Step 3: Simplify SSE Endpoints
+
+```python
+# Before
+mount_sse(app, broker, authorize_fn)
+# Or manual endpoint creation...
+
+# After
+@app.get("/events")
+@sse_endpoint(topics=["comments"], authorize=authorize_fn)
+async def events(request: Request):
+    pass
+```
+
+#### ℹ️ Fully Backwards Compatible
+
+The simplified API is fully backwards compatible. You can mix both APIs in the same application: use decorators for new endpoints while keeping manual `broker.publish()` calls in existing code. Access the broker directly via `app.broker` or `request.app.state.broker`.
+
+### 📚 Complete Example
+
+Here's a complete CRM comments system using the simplified API:
+
+**app_simple.py:**
+```python
+"""Simplified CRM Comments with SSE"""
+from fastapi import Request, HTTPException
+from pydantic import BaseModel
+from fastapi_sse_events import SSEApp, sse_event, sse_endpoint
+
+# One-line app setup
+app = SSEApp(
+    title="CRM Comments",
+    redis_url="redis://localhost:6379",
+    enable_cors=True
+)
+
+# In-memory storage
+comments_db = {}
+comment_id = 0
+
+class CommentCreate(BaseModel):
+    thread_id: int
+    author: str
+    content: str
+
+# CRUD endpoints with auto-publishing
+@app.post("/comments")
+@sse_event(topic="comments", event="comment_created")
+async def create_comment(request: Request, comment: CommentCreate):
+    global comment_id
+    comment_id += 1
+    
+    new_comment = {
+        "id": comment_id,
+        "thread_id": comment.thread_id,
+        "author": comment.author,
+        "content": comment.content
+    }
+    
+    comments_db[comment_id] = new_comment
+    return new_comment  # Auto-published to SSE!
+
+@app.put("/comments/{comment_id}")
+@sse_event(topic="comments", event="comment_updated")
+async def update_comment(
+    request: Request,
+    comment_id: int,
+    content: str
+):
+    if comment_id not in comments_db:
+        raise HTTPException(404, "Not found")
+    
+    comments_db[comment_id]["content"] = content
+    return comments_db[comment_id]  # Auto-published!
+
+@app.delete("/comments/{comment_id}")
+@sse_event(topic="comments", event="comment_deleted")
+async def delete_comment(request: Request, comment_id: int):
+    if comment_id not in comments_db:
+        raise HTTPException(404, "Not found")
+    
+    deleted = comments_db.pop(comment_id)
+    return {"id": comment_id}  # Auto-published!
+
+@app.get("/comments")
+async def list_comments():
+    return list(comments_db.values())
+
+# SSE endpoint with auto-streaming
+@app.get("/events")
+@sse_endpoint(topics=["comments"])
+async def events(request: Request):
+    pass  # All automatic!
+
+# Run with: uvicorn app_simple:app --reload
+```
+
+### 🚀 Try It!
+
+The complete example is available in `examples/crm_comments/app_simple.py`. Run it with: `cd examples/crm_comments && ./start_simple.sh`
+
+### ❓ FAQ
+
+#### Can I still use the manual API?
+
+Yes! The simplified API is built on top of the manual API and both work together. You can access the broker directly via `app.broker.publish(...)` whenever needed.
+
+#### Do I need the Request parameter?
+
+Yes, for `@sse_event` and `@sse_endpoint` decorators. The decorators need access to the app state where the broker is stored. Add `request: Request` as the first parameter after `self` (for class methods).
+
+#### Can I use dynamic topics?
+
+Yes! You can still use manual `app.broker.publish()` for dynamic topics like `f"thread:{thread_id}"`, or use the decorator for general topics and manual publish for specific ones.
+
+#### What about authorization?
+
+Use the `authorize` parameter in `@sse_endpoint`: `@sse_endpoint(authorize=my_auth_function)`. The function receives `(request, topic)` and returns `True/False`.
+
+#### Does it work with dependency injection?
+
+Yes! FastAPI dependencies work normally. Just make sure `request: Request` is one of your parameters.
 
 ---
 
-## Core Concepts
+## Architecture
 
-### Architecture
+FastAPI SSE Events uses a simple but powerful architecture:
 
 ```
 ┌─────────────┐         ┌─────────────┐         ┌─────────────┐
-│  Client 1   │         │  Client 2   │         │  Client N   │
-│ EventSource │         │ EventSource │         │ EventSource │
-└──────┬──────┘         └──────┬──────┘         └──────┬──────┘
-       │                       │                       │
-       │        SSE Stream (/events?topic=...)        │
-       └───────────────────────┼───────────────────────┘
-                               │
-                    ┌──────────▼──────────┐
-                    │  FastAPI Instance   │
-                    │                     │
-                    │  REST API + SSE     │
-                    └──────────┬──────────┘
-                               │
-                               │ Pub/Sub
-                    ┌──────────▼──────────┐
-                    │   Redis Server      │
-                    │                     │
-                    │  Topic Channels     │
-                    └─────────────────────┘
-                               ▲
-                               │ Pub/Sub
-                    ┌──────────┴──────────┐
-                    │  FastAPI Instance   │
-                    │                     │
-                    │  REST API + SSE     │
-                    └─────────────────────┘
+│   Browser   │  SSE    │  FastAPI    │  Pub    │    Redis    │
+│   Client    │◄────────│   Instance  │◄────────│   Pub/Sub   │
+└─────────────┘         └─────────────┘         └─────────────┘
+      │                       │                        ▲
+      │                       │                        │
+      │  POST /api/task       │  Publish Event         │
+      └──────────────────────►│───────────────────────►│
+                              │                        │
+                              │   Subscribe Topics     │
+                              └───────────────────────►│
 ```
 
-### How It Works
+### Flow Breakdown
 
-1. **Client** opens SSE connection: `GET /events?topic=comment_thread:123`
-2. **Server** subscribes to Redis channel for that topic
-3. **Another client** posts data via REST API
-4. **Server** saves data and publishes event to Redis
-5. **Redis** broadcasts to all subscribed FastAPI instances
-6. **All clients** receive lightweight notification
-7. **Clients** fetch fresh data via existing REST endpoints
+1. **Client connects** to `/sse?topics=task:123`
+2. **FastAPI subscribes** to Redis channels matching those topics
+3. **Another client** makes a POST request that modifies data
+4. **Your endpoint** publishes event to Redis: `task:created`
+5. **Redis broadcasts** to all subscribed FastAPI instances
+6. **FastAPI forwards** event to connected SSE clients
+7. **Browser receives** notification and refreshes data via REST
 
-### Event Flow
+### ℹ️ Horizontal Scaling
+
+Because Redis Pub/Sub is used as the message broker, you can run multiple FastAPI instances behind a load balancer. An event published by any instance reaches all connected clients across all instances.
+
+---
+
+## Features
+
+### 🔌 Simple Integration
+Add SSE with 3 lines of code. Minimal changes to existing endpoints. Works alongside your REST API.
+
+### 📡 Server-Sent Events
+Lightweight, one-way communication (server → client). Built on standard HTTP with automatic reconnection.
+
+### 🗄️ Redis Pub/Sub
+Horizontal scaling across multiple API instances. Battle-tested message broker with low latency.
+
+### 🔒 Authorization Hooks
+Secure topic subscriptions with custom auth logic. Integrate with your existing authentication system.
+
+### 💓 Heartbeat Support
+Automatic connection keepalive with configurable intervals. Prevents proxy timeouts.
+
+### 🏷️ Topic-based Routing
+Fine-grained subscription control per resource. Subscribe to exactly what you need.
+
+### 🛡️ Type Safe
+Full type hints and mypy compliance. Catch errors at development time, not runtime.
+
+### ✅ Well Tested
+Comprehensive test suite with 80%+ coverage. Production-ready and battle-tested.
+
+---
+
+## How It Works
+
+### The "Notify Then Fetch" Pattern
+
+FastAPI SSE Events implements a clean separation between notifications and data:
+
+1. **SSE notifies** that something changed
+2. **Client fetches** fresh data via REST
+3. **REST API** remains the source of truth
+
+### ⚠️ SSE vs Full Data Push
+
+We recommend sending lightweight notifications (IDs, types) via SSE rather than full objects. This keeps your REST API as the canonical data source and reduces bandwidth. Clients can intelligently fetch only changed resources.
+
+### Example Flow
 
 ```
-User Action → REST Endpoint → Save to DB → Publish Event → Redis Pub/Sub
-                                                                ↓
-Client ← SSE Stream ← FastAPI ← Redis Subscribe ← Redis Pub/Sub
-  ↓
-Fetch Updated Data ← REST Endpoint
+User A                  Server                  User B
+  │                         │                      │
+  │  1. POST /comments      │                      │
+  │────────────────────────►│                      │
+  │                         │                      │
+  │                         │  2. SSE Event        │
+  │                         │────────────────────►│
+  │                         │   "comment:created"  │
+  │                         │                      │
+  │                         │  3. GET /comments    │
+  │                         │◄────────────────────│
+  │                         │                      │
+  │                         │  4. Fresh Data       │
+  │                         │────────────────────►│
 ```
 
 ---
 
-## Usage Guide
+## Basic Integration
 
 ### Basic Integration (Recommended)
 
