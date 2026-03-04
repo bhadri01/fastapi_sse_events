@@ -238,236 +238,352 @@ Use `SSEApp` + decorators for minimal boilerplate. Keep `mount_sse()` for advanc
 
 ### Publishing Events
 
+There are several approaches to publishing events, ranging from the simple (recommended) to the advanced (manual control).
+
 #### Method 1: Decorator-Based Publish (Recommended)
 
+The simplest and most Pythonic approach. Just add `@publish_event()` to any endpoint, and the decorator automatically publishes the response:
+
 ```python
+from fastapi import Request
+from fastapi_sse_events import publish_event
+
 @app.post("/tickets/{ticket_id}/status")
 @publish_event(topic="tickets", event="ticket_status_changed")
 async def update_ticket_status(request: Request, ticket_id: int, status: str):
-  await db.update_ticket(ticket_id, status=status)
-  return {"id": ticket_id, "status": status}
+    await db.update_ticket(ticket_id, status=status)
+    return {"id": ticket_id, "status": status}  # Auto-published to all subscribers
 ```
+
+Features:
+- ✅ No boilerplate - just decorate your endpoint
+- ✅ Response automatically published as event data
+- ✅ Automatic HTTP and SSE notification
+- ✅ Works with any endpoint (GET, POST, PUT, DELETE)
 
 #### Method 2: Direct Publish (Advanced)
 
+For fine-grained control over event data, publish manually using `app.state.event_broker`:
+
 ```python
+from fastapi_sse_events import publish_event
+
 @app.post("/tickets/{ticket_id}/status")
-async def update_ticket_status(ticket_id: int, status: str):
+async def update_ticket_status(request: Request, ticket_id: int, status: str):
     # Update database
     await db.update_ticket(ticket_id, status=status)
     
-    # Notify subscribers
-    await broker.publish(
+    # Manual publish with custom data
+    await app.state.event_broker.publish(
         topic=f"ticket:{ticket_id}",
         event="ticket_status_changed",
         data={
             "ticket_id": ticket_id,
             "status": status,
-            "updated_at": datetime.utcnow().isoformat()
+            "changed_at": datetime.utcnow().isoformat(),
+            "changed_by": request.user.id
         }
     )
     
-    return {"status": "updated"}
+    return {"id": ticket_id, "status": status}
 ```
 
-#### Method 3: Using TopicBuilder
+Use this when you need:
+- Custom/computed event data not in the HTTP response
+- Different data for SSE vs HTTP clients
+- Multiple events from a single endpoint
+
+#### Method 3: Service Layer Pattern (Advanced)
+
+Encapsulate publishing logic in service classes for clean separation of concerns:
 
 ```python
-from fastapi_sse_events import TopicBuilder
+from fastapi_sse_events import publish_event
 
-topics = TopicBuilder()
-
-@app.post("/tasks")
-async def create_task(task: Task):
-    saved_task = await db.save(task)
-    
-    await broker.publish(
-        topic=topics.task(saved_task.id),
-        event="task_created",
-        data={"task_id": saved_task.id}
-    )
-    
-    return saved_task
-```
-
-#### Method 4: Service Layer Pattern
-
-```python
-# services/comment_service.py
-class CommentService:
-    def __init__(self, broker: EventBroker):
+class TaskService:
+    def __init__(self, broker):
         self.broker = broker
-        self.topics = TopicBuilder()
     
-    async def create_comment(self, thread_id: int, data: dict):
+    async def create_task(self, data: dict, user_id: int):
         # Business logic
-        comment = await db.save_comment(data)
+        task = await db.save_task(data, user_id)
         
-        # Auto-notify
+        # Publish to project subscribers
         await self.broker.publish(
-            topic=self.topics.comment_thread(thread_id),
-            event="comment_created",
-            data={"comment_id": comment.id}
+            topic=f"project:{data['project_id']}",
+            event="task:created",
+            data={"id": task.id, "title": task.title, "assignee": user_id}
         )
         
-        return comment
+        return task
 
-# main.py
-@app.post("/comments")
-async def create_comment_endpoint(data: CommentCreate):
-    service = CommentService(app.state.event_broker)
-    return await service.create_comment(data.thread_id, data.dict())
+# In endpoint
+@app.post("/tasks")
+async def create_task_endpoint(request: Request, data: TaskCreate):
+    service = TaskService(app.state.event_broker)
+    return await service.create_task(data.dict(), request.user.id)
 ```
 
 ### Authorization
 
-Protect topic access with custom authorization:
+Protect SSE subscriptions with custom authorization callbacks. Control which users can subscribe to which topics:
 
 ```python
 from fastapi import Request, HTTPException
+from fastapi_sse_events import SSEApp
 
-async def authorize_topic(request: Request, topic: str) -> bool:
+async def authorize_subscription(request: Request, topic: str) -> bool:
     """
-    Authorize topic access based on user permissions.
+    Authorization callback - return True to allow subscription, False to deny.
+    Called for each topic subscription attempt.
     
     Args:
-        request: FastAPI request with user info
+        request: FastAPI request (contains user info via session, JWT, etc.)
         topic: Topic being subscribed to
     
     Returns:
         True if authorized, False otherwise
     """
-    # Extract user from JWT token
-    token = request.headers.get("Authorization", "").replace("Bearer ", "")
-    if not token:
+    # Get current user (implement based on your auth method)
+    user = await get_current_user(request)
+    if not user:
+        return False
+    
+    # Allow user to subscribe to their own topic
+    if topic.startswith("user:"):
+        user_id = topic.split(":")[1]
+        return str(user.id) == user_id
+    
+    # Check workspace membership
+    if topic.startswith("workspace:"):
+        workspace_id = topic.split(":")[1]
+        return await user_has_workspace_access(user.id, workspace_id)
+    
+    # Check organization access
+    if topic.startswith("org:"):
+        org_id = topic.split(":")[1]
+        return await user_in_organization(user.id, org_id)
+    
+    # Broadcast topics - anyone can subscribe
+    if topic in ["announcements", "system"]:
+        return True
+    
+    # Deny by default
+    return False
+
+# Create app with authorization
+app = SSEApp(
+    redis_url="redis://localhost:6379/0",
+    authorize=authorize_subscription  # Pass authorization callback
+)
+```
+
+**JWT-Based Authorization Example:**
+
+```python
+from fastapi.security import HTTPBearer, HTTPAuthCredentialDetails
+from jose import jwt, JWTError
+
+security = HTTPBearer()
+
+async def authorize_subscription(request: Request, topic: str) -> bool:
+    # Get token from header
+    credentials = await security(request)
+    if not credentials:
         return False
     
     try:
-        user = verify_jwt_token(token)
-    except Exception:
+        # Decode JWT token
+        payload = jwt.decode(
+            credentials.credentials,
+            settings.SECRET_KEY,
+            algorithms=["HS256"]
+        )
+        user_id = payload.get("sub")
+        user_roles = payload.get("roles", [])
+    except JWTError:
         return False
     
-    # Check permissions based on topic pattern
-    if topic.startswith("comment_thread:"):
-        thread_id = int(topic.split(":")[1])
-        return await user_can_access_thread(user.id, thread_id)
+    # Check topic permissions based on roles
+    if topic.startswith("admin:"):
+        return "admin" in user_roles
     
-    elif topic.startswith("workspace:"):
-        workspace_id = topic.split(":")[1]
-        return await user_in_workspace(user.id, workspace_id)
+    if topic.startswith("user:"):
+        return user_id == topic.split(":")[1]
     
-    elif topic.startswith("user:"):
-        user_id = topic.split(":")[1]
-        return user.id == user_id  # Users can only subscribe to their own topics
-    
-    return False
-
-# Mount with authorization
-broker = mount_sse(app, authorize=authorize_topic)
+    return True
 ```
+
+**Security Best Practices:**
+
+✅ **Always**:
+- Validate user authentication (JWT, sessions, etc.)
+- Check permissions for resource-specific topics
+- Log authorization failures for security monitoring
+- Use granular topic patterns with IDs (e.g., `workspace:123` not just `workspace`)
+
+❌ **Never**:
+- Allow wildcard subscriptions without explicit auth
+- Trust client-supplied topic names
+- Skip authorization for "internal" topics
+- Cache authorization results without invalidation
 
 ### Topic Patterns
 
-Use consistent topic naming conventions:
+Topics are simple strings that route events to subscribers. Choose a consistent naming convention for your application:
+
+**Simple Topic Strings:**
+
+```python
+# Just use strings directly!
+await app.state.event_broker.publish(
+    topic="comments",
+    event="comment:created",
+    data={"id": 1, "text": "Hello"}
+)
+
+# Or with resource IDs for more granularity
+await app.state.event_broker.publish(
+    topic="comment:123",
+    event="updated",
+    data={"text": "Edited"}
+)
+```
+
+**Recommended Topic Conventions:**
+
+| Pattern | Use Case | Example |
+|---------|----------|---------|
+| `resource` | Broadcast updates to all | `comments`, `tasks`, `notifications` |
+| `resource:id` | Updates to specific resource | `comment:123`, `task:456`, `invite:789` |
+| `resource:id:action` | Specific action on resource | `comment:123:deleted`, `task:456:assigned` |
+| `workspace:id` | All updates in a workspace | `workspace:acme-corp` |
+| `user:id` | User-specific notifications | `user:john_doe` |
+| `broadcast` or `global` | System-wide announcements | `broadcast` |
+
+**Using TopicBuilder (Optional):**
+
+For consistency, you can use the optional `TopicBuilder` helper:
 
 ```python
 from fastapi_sse_events import TopicBuilder
 
-topics = TopicBuilder()
+# Built-in helper methods
+TopicBuilder.comment("c123")           # → "comment:c123"
+TopicBuilder.task("t456")              # → "task:t456"
+TopicBuilder.workspace("ws789")        # → "workspace:ws789"
+TopicBuilder.user("john")              # → "user:john"
 
-# Built-in patterns
-topics.comment_thread(123)    # "comment_thread:123"
-topics.ticket(456)            # "ticket:456"
-topics.task(789)              # "task:789"
-topics.workspace("ws1")       # "workspace:ws1"
-topics.user("user_123")       # "user:user_123"
-
-# Custom patterns
-topics.custom("project", "p1") # "project:p1"
-topics.custom("document", 42)  # "document:42"
-
-# Or use strings directly
-await broker.publish(
-    topic="notification:broadcast",
-    event="system_update",
-    data={"message": "Maintenance in 5 minutes"}
-)
+# Or custom topics
+TopicBuilder.custom("invoice", "inv123")  # → "invoice:inv123"
 ```
 
-**Recommended conventions:**
+However, `TopicBuilder` is optional - plain strings work equally well and are often simpler.
 
-| Pattern | Use Case | Example |
-|---------|----------|---------|
-| `resource:id` | Updates to a specific resource | `ticket:123`, `task:456` |
-| `resource_thread:id` | Threaded discussions | `comment_thread:789` |
-| `workspace:id` | Workspace-wide updates | `workspace:acme-corp` |
-| `user:id` | User-specific notifications | `user:user_123` |
-| `broadcast` | System-wide announcements | `broadcast` |
+**Best Practices:**
+
+- ✅ Use colons for namespacing: `resource:id`
+- ✅ Keep topic names lowercase and short
+- ✅ Include IDs for resource-specific topics (enables authorization)
+- ✅ Use consistent separators (colon recommended)
+- ✅ Document topic names your app uses
+- ❌ Avoid dynamic topic names without validation
+- ❌ Avoid spaces or special characters
+- ❌ Don't use topics to store data (topics are routing keys only)
 
 ---
 
 ## Configuration
 
-### RealtimeConfig Options
+### SSEApp Configuration
+
+The `SSEApp` class provides simple one-line configuration:
 
 ```python
-from fastapi_sse_events import RealtimeConfig
+from fastapi_sse_events import SSEApp
+import os
 
-config = RealtimeConfig(
-    # Redis connection URL
-    redis_url="redis://localhost:6379/0",
-    
-    # Heartbeat interval (5-60 seconds)
-    heartbeat_seconds=15,
-    
-    # SSE endpoint path
-    sse_path="/events",
-    
-    # Topic prefix for namespacing (optional)
-    topic_prefix="",
+# Minimal setup
+app = SSEApp(redis_url="redis://localhost:6379/0")
+
+# Full configuration
+app = SSEApp(
+    title="My API",
+    redis_url=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+    heartbeat_seconds=30,              # SSE keepalive interval (5-60s)
+    authorize=authorize_subscription,   # Authorization callback (optional)
 )
 ```
 
+**Configuration Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `title` | str | "FastAPI" | App title (optional) |
+| `redis_url` | str | ⚠️ Required | Redis connection URL |
+| `heartbeat_seconds` | int | 30 | SSE keepalive interval (5-60) |
+| `authorize` | callable | None | Authorization callback function |
+
 ### Environment Variables
 
-Configure via environment variables:
+Load configuration from environment for easier deployment:
+
+```python
+import os
+from fastapi_sse_events import SSEApp
+
+app = SSEApp(
+    redis_url=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+    heartbeat_seconds=int(os.getenv("SSE_HEARTBEAT_SECONDS", "30")),
+)
+```
+
+**Standard Environment Variables:**
 
 ```bash
-export SSE_REDIS_URL="redis://localhost:6379/0"
+# Development
+export REDIS_URL="redis://localhost:6379/0"
 export SSE_HEARTBEAT_SECONDS=30
-export SSE_SSE_PATH="/realtime"
-export SSE_TOPIC_PREFIX="prod"
+
+# Production (with authentication)
+export REDIS_URL="redis://:password@redis-prod.example.com:6379/0"
+export SSE_HEARTBEAT_SECONDS=60
 ```
 
-Or use a `.env` file with `python-dotenv`:
-
-```bash
-# Copy example file
-cp .env.example .env
-
-# Edit .env with your settings
-nano .env
-```
+Load from `.env` file using `python-dotenv`:
 
 ```python
 from dotenv import load_dotenv
+import os
+from fastapi_sse_events import SSEApp
 
-# Load environment variables
 load_dotenv()
 
-# Config automatically reads from environment
-config = RealtimeConfig()
-broker = mount_sse(app, config)
+app = SSEApp(
+    redis_url=os.getenv("REDIS_URL"),
+    heartbeat_seconds=int(os.getenv("SSE_HEARTBEAT_SECONDS", "30")),
+)
 ```
 
-**Available Environment Variables:**
+### Advanced: Manual Broker Setup
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `SSE_REDIS_URL` | Redis connection URL | `redis://localhost:6379/0` |
-| `SSE_HEARTBEAT_SECONDS` | Heartbeat interval (5-60) | `15` |
-| `SSE_SSE_PATH` | SSE endpoint path | `/events` |
-| `SSE_TOPIC_PREFIX` | Topic namespace prefix | `""` (empty) |
+For advanced use cases, you can configure the broker manually (not recommended for most applications):
+
+```python
+from fastapi import FastAPI
+from fastapi_sse_events import EventBroker, RealtimeConfig, mount_sse
+
+app = FastAPI()
+
+config = RealtimeConfig(
+    redis_url="redis://localhost:6379/0",
+    heartbeat_seconds=30,
+)
+
+broker = mount_sse(app, config, authorize=authorize_subscription)
+```
+
+Prefer `SSEApp` for new projects - it handles all the setup automatically.
 
 ---
 
@@ -476,96 +592,127 @@ broker = mount_sse(app, config)
 ### JavaScript / Browser
 
 ```javascript
-// Create EventSource connection
-const topic = 'comment_thread:123';
-const eventSource = new EventSource(
-  `http://localhost:8000/events?topic=${topic}`
-);
+// Connect to SSE endpoint
+const eventSource = new EventSource('/events?topic=comments');
 
-// Handle connection events
-eventSource.onopen = () => {
-  console.log('SSE connected');
-};
+// Handle connection opened
+eventSource.addEventListener('open', () => {
+  console.log('✅ Connected to SSE');
+  document.getElementById('status').textContent = 'Connected';
+});
 
-eventSource.onerror = (error) => {
-  console.error('SSE error:', error);
-  // Browser automatically reconnects
-};
+// Handle connection errors
+eventSource.addEventListener('error', (error) => {
+  console.error('❌ SSE Error:', error);
+  document.getElementById('status').textContent = 'Disconnected';
+  // EventSource automatically reconnects
+});
 
 // Listen to specific events
-eventSource.addEventListener('comment_created', (e) => {
-  const data = JSON.parse(e.data);
+eventSource.addEventListener('comment:created', (event) => {
+  const data = JSON.parse(event.data);
   console.log('New comment:', data);
   
-  // Refresh data from REST API
-  fetchComments(data.thread_id);
+  // Fetch fresh data from API
+  fetch(`/comments/${data.id}`)
+    .then(r => r.json())
+    .then(comment => renderComment(comment));
 });
 
-eventSource.addEventListener('comment_updated', (e) => {
-  const data = JSON.parse(e.data);
+eventSource.addEventListener('comment:updated', (event) => {
+  const data = JSON.parse(event.data);
   console.log('Updated comment:', data);
-  fetchComments(data.thread_id);
+  
+  // Refresh specific comment
+  fetch(`/comments/${data.id}`)
+    .then(r => r.json())
+    .then(comment => updateComment(comment));
 });
 
-// Handle heartbeat (optional)
-eventSource.addEventListener('ping', (e) => {
-  console.log('Heartbeat received');
+// Listen to heartbeat (optional)
+eventSource.addEventListener('heartbeat', (event) => {
+  console.log('💓 Heartbeat');
 });
 
 // Subscribe to multiple topics
-const topics = ['comment_thread:123', 'ticket:456'];
-const eventSource = new EventSource(
-  `http://localhost:8000/events?topic=${topics.join(',')}`
+const multiTopics = ['comments', 'tasks', 'notifications'];
+const eventSource2 = new EventSource(
+  `/events?topic=${multiTopics.join(',')}`
 );
 
 // Cleanup
-window.addEventListener('beforeunload', () => {
+function closeSSE() {
   eventSource.close();
-});
+}
+window.addEventListener('beforeunload', closeSSE);
 ```
 
-### React Example
+### React Hook Example
 
 ```jsx
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 
+// Custom hook for SSE
+function useSSE(topic, onEvent) {
+  const [connected, setConnected] = useState(false);
+
+  useEffect(() => {
+    const eventSource = new EventSource(`/events?topic=${topic}`);
+
+    eventSource.addEventListener('open', () => {
+      setConnected(true);
+    });
+
+    eventSource.addEventListener('error', () => {
+      setConnected(false);
+    });
+
+    // Forward all events to callback
+    eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      onEvent?.(event.type, data);
+    };
+
+    return () => eventSource.close();
+  }, [topic, onEvent]);
+
+  return connected;
+}
+
+// Component using the hook
 function CommentList({ threadId }) {
   const [comments, setComments] = useState([]);
+
+  // Handle SSE events
+  const handleSSEEvent = useCallback((eventType, data) => {
+    if (eventType === 'comment:created' || eventType === 'comment:updated') {
+      // Refresh data from API
+      fetchComments();
+    }
+  }, []);
+
+  const connected = useSSE(`comment_thread:${threadId}`, handleSSEEvent);
 
   useEffect(() => {
     // Initial load
     fetchComments();
-
-    // Setup SSE
-    const eventSource = new EventSource(
-      `http://localhost:8000/events?topic=comment_thread:${threadId}`
-    );
-
-    eventSource.addEventListener('comment_created', () => {
-      fetchComments();
-    });
-
-    eventSource.addEventListener('comment_updated', () => {
-      fetchComments();
-    });
-
-    return () => {
-      eventSource.close();
-    };
   }, [threadId]);
 
   const fetchComments = async () => {
-    const response = await fetch(
-      `http://localhost:8000/threads/${threadId}/comments`
-    );
+    const response = await fetch(`/comments?thread_id=${threadId}`);
     const data = await response.json();
-    setComments(data.comments);
+    setComments(data);
   };
 
   return (
     <div>
+      <div style={{ color: connected ? 'green' : 'red' }}>
+        {connected ? '🟢 Live' : '🔴 Offline'}
+      </div>
       {comments.map(comment => (
-        <div key={comment.id}>{comment.content}</div>
+        <div key={comment.id} className="comment">
+          {comment.content}
+        </div>
       ))}
     </div>
   );
@@ -576,18 +723,38 @@ function CommentList({ threadId }) {
 
 ```python
 import httpx
+import json
 
-async with httpx.AsyncClient() as client:
-    async with client.stream(
-        "GET",
-        "http://localhost:8000/events?topic=comment_thread:123"
-    ) as response:
-        async for line in response.aiter_lines():
-            if line.startswith("event: "):
-                event_type = line[7:]
-            elif line.startswith("data: "):
-                data = json.loads(line[6:])
-                print(f"Received {event_type}: {data}")
+async def listen_to_events():
+    """Listen to SSE events from Python."""
+    async with httpx.AsyncClient() as client:
+        async with client.stream(
+            "GET",
+            "http://localhost:8000/events?topic=comments",
+            headers={"Accept": "text/event-stream"}
+        ) as response:
+            async for line in response.aiter_lines():
+                if line.startswith("event:"):
+                    event_type = line[7:].strip()
+                elif line.startswith("data:"):
+                    data_str = line[5:].strip()
+                    try:
+                        data = json.loads(data_str)
+                        print(f"Event: {event_type}, Data: {data}")
+                    except json.JSONDecodeError:
+                        pass
+
+# Using sseclient-py library (simpler)
+from sseclient import SSEClient
+
+def listen_simple():
+    """Simple SSE listening with sseclient-py."""
+    url = "http://localhost:8000/events?topic=comments"
+    
+    for event in SSEClient(url):
+        if event.event != "heartbeat":
+            print(f"Event: {event.event}")
+            print(f"Data: {event.data}")
 ```
 
 ---
@@ -865,32 +1032,88 @@ More examples coming soon:
 - Multi-tenant workspace notifications
 
 ---
-
 ## API Reference
 
-### `mount_sse()`
+### SSEApp (Recommended)
 
-Main integration function to add SSE to FastAPI app.
+Simplified FastAPI subclass with built-in SSE support.
 
 ```python
-def mount_sse(
-    app: FastAPI,
-    config: RealtimeConfig | None = None,
-    authorize: AuthorizeFn | None = None,
-) -> EventBroker:
-    """Mount SSE to FastAPI app."""
+from fastapi_sse_events import SSEApp
+
+class SSEApp(FastAPI):
+    """FastAPI app with SSE support pre-configured."""
+    
+    def __init__(
+        self,
+        title: str = "API",
+        redis_url: str = "redis://localhost:6379/0",
+        heartbeat_seconds: int = 30,
+        authorize: Optional[AuthorizeFn] = None,
+        **kwargs
+    ):
+        pass
+```
+
+**Usage:**
+```python
+app = SSEApp(
+    title="My API",
+    redis_url="redis://localhost:6379/0",
+    heartbeat_seconds=30,
+    authorize=authorize_callback  # Optional
+)
+```
+
+**Automatically Provides:**
+- ✅ EventBroker at `app.state.event_broker`
+- ✅ SSE endpoint at `/events` (with `?topic=` query param)
+- ✅ Health checks at `/health*`
+- ✅ Metrics at `/metrics`
+
+### Decorators
+
+#### `@publish_event()`
+
+Automatically publishes endpoint response to subscribers.
+
+```python
+from fastapi_sse_events import publish_event
+
+@app.post("/comments")
+@publish_event(topic="comments", event="comment:created")
+async def create_comment(request: Request, text: str):
+    # Save to database
+    comment = await db.save_comment(text)
+    # Response automatically published to all subscribers!
+    return comment
 ```
 
 **Parameters:**
-- `app`: FastAPI application instance
-- `config`: Configuration (optional, uses defaults)
-- `authorize`: Authorization callback (optional)
+- `topic` (str): Topic to publish to
+- `event` (str): Event type identifier
 
-**Returns:** `EventBroker` instance for publishing events
+#### `@subscribe_to_events()`
 
-### `EventBroker`
+Converts endpoint to SSE stream. Query param: `?topic=...`
 
-Broker for publishing and subscribing to events.
+```python
+from fastapi_sse_events import subscribe_to_events
+
+@app.get("/events")
+@subscribe_to_events()
+async def events(request: Request):
+    # Endpoint body can be empty
+    pass
+```
+
+**Query Parameters:**
+- `topic` (str, required): Topic to subscribe to
+- `topic=topic1,topic2`: Multiple topics (comma-separated)
+
+### EventBroker
+
+Manual event publishing (use decorators when possible).
 
 ```python
 class EventBroker:
@@ -898,52 +1121,76 @@ class EventBroker:
         self,
         topic: str,
         event: str,
-        data: dict[str, Any]
+        data: dict[str, Any] | EventData
     ) -> None:
-        """Publish event to topic."""
+        """Publish event to all subscribers on topic."""
 ```
 
-**Methods:**
-- `publish(topic, event, data)`: Publish event to subscribers
-
-### `RealtimeConfig`
-
-Configuration for SSE system.
-
+**Example:**
 ```python
-class RealtimeConfig(BaseSettings):
-    redis_url: str = "redis://localhost:6379/0"
-    heartbeat_seconds: int = 15
-    sse_path: str = "/events"
-    topic_prefix: str = ""
+await app.state.event_broker.publish(
+    topic="comments",
+    event="comment:created",
+    data={"id": 1, "text": "Hello"}
+)
 ```
 
-### `TopicBuilder`
+### Configuration (SSEApp Parameters)
 
-Helper for building consistent topic names.
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `title` | str | "API" | Application title |
+| `redis_url` | str | "redis://localhost:6379/0" | Redis connection URL |
+| `heartbeat_seconds` | int | 30 | SSE keepalive interval (5-60) |
+| `authorize` | AuthorizeFn | None | Authorization callback (optional) |
+
+### Advanced: Manual Setup
+
+For complex use cases, manually configure the broker:
 
 ```python
-class TopicBuilder:
-    @staticmethod
-    def comment_thread(thread_id: str | int) -> str:
-        """Build comment thread topic."""
-    
-    @staticmethod
-    def ticket(ticket_id: str | int) -> str:
-        """Build ticket topic."""
-    
-    # ... more helpers
+from fastapi import FastAPI
+from fastapi_sse_events import mount_sse, RealtimeConfig
+
+app = FastAPI()
+
+config = RealtimeConfig(
+    redis_url="redis://localhost:6379/0",
+    heartbeat_seconds=30,
+)
+
+broker = mount_sse(app, config, authorize=authorize_fn)
 ```
 
-### `AuthorizeFn`
+### TopicBuilder (Optional)
 
-Type alias for authorization callback.
+Helper for consistent topic naming (optional).
 
 ```python
+from fastapi_sse_events import TopicBuilder
+
+# All optional - plain strings work too
+TopicBuilder.comment("c123")        # → "comment:c123"
+TopicBuilder.task("t456")           # → "task:t456"
+TopicBuilder.workspace("ws789")     # → "workspace:ws789"
+TopicBuilder.user("john")           # → "user:john"
+TopicBuilder.custom("invoice", "i001")  # → "invoice:i001"
+```
+
+### Type Definitions
+
+```python
+# Authorization callback type
 AuthorizeFn = Callable[[Request, str], Awaitable[bool]]
 
+# Event data
+EventData = dict[str, Any]  # Any JSON-serializable dict
+
+# Example authorization
 async def authorize(request: Request, topic: str) -> bool:
-    """Return True if authorized."""
+    """Return True to allow subscription, False to deny."""
+    user = await get_current_user(request)
+    return user is not None and topic.startswith(f"user:{user.id}")
 ```
 
 ---

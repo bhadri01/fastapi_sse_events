@@ -1255,10 +1255,30 @@ sse.addEventListener('error', (error) => {
                     </h2>
 
                     <p>
-                        Events are published using the <code>EventBroker</code> available at
-                        <code>app.state.event_broker</code>:
+                        There are two primary approaches to publishing events: using decorators (recommended) or direct publish.
                     </p>
 
+                    <h3 class="subsection-title">Method 1: Decorator-Based Publishing (Recommended)</h3>
+                    <p>The simplest approach - just add <code>@publish_event()</code> to any endpoint and the response is automatically published:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Python</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-python">from fastapi_sse_events import publish_event
+
+@app.post("/tickets/{ticket_id}")
+@publish_event(topic="tickets", event="ticket:updated")
+async def update_ticket(request: Request, ticket_id: int, status: str):
+    await db.update(ticket_id, status=status)
+    return {"id": ticket_id, "status": status}  # Auto-published!</code></pre>
+                    </div>
+
+                    <h3 class="subsection-title">Method 2: Direct Publish (Advanced)</h3>
+                    <p>For fine-grained control, publish manually using <code>app.state.event_broker</code>:</p>
                     <div class="code-block">
                         <div class="code-header">
                             <span>Python</span>
@@ -1268,16 +1288,16 @@ sse.addEventListener('error', (error) => {
                             </button>
                         </div>
                         <pre><code class="language-python">await app.state.event_broker.publish(
-    topic="resource:123",      # Who should receive this
-    event="resource:updated",  # Event type (custom string)
-    data={                     # Payload (dict or EventData)
+    topic="resource:123",      # Topic (routing key)
+    event="resource:updated",  # Event type
+    data={                     # Payload
         "id": "123",
         "changed_fields": ["status"]
     }
 )</code></pre>
                     </div>
 
-                    <h3 class="subsection-title">Event Format</h3>
+                    <h3 class="subsection-title">Event Publishing API</h3>
                     <table>
                         <thead>
                             <tr>
@@ -1305,7 +1325,7 @@ sse.addEventListener('error', (error) => {
                         </tbody>
                     </table>
 
-                    <h3 class="subsection-title">Common Event Patterns</h3>
+                    <h3 class="subsection-title">Common Publishing Patterns</h3>
                     <div class="code-block">
                         <div class="code-header">
                             <span>Python</span>
@@ -1315,28 +1335,28 @@ sse.addEventListener('error', (error) => {
                             </button>
                         </div>
                         <pre><code class="language-python"># Resource Created
-await broker.publish(
-    topic=TopicBuilder.workspace(workspace_id),
+await app.state.event_broker.publish(
+    topic="tasks",
     event="task:created",
     data={"id": task_id, "title": "New Task"}
 )
 
 # Resource Updated
-await broker.publish(
-    topic=TopicBuilder.task(task_id),
+await app.state.event_broker.publish(
+    topic=f"task:{task_id}",
     event="task:updated",
-    data={"id": task_id, "fields": ["status", "assignee"]}
+    data={"id": task_id, "status": "completed"}
 )
 
 # Resource Deleted
-await broker.publish(
-    topic=TopicBuilder.task(task_id),
+await app.state.event_broker.publish(
+    topic=f"task:{task_id}",
     event="task:deleted",
     data={"id": task_id}
 )
 
 # Broadcast to All
-await broker.publish(
+await app.state.event_broker.publish(
     topic="global",
     event="system:maintenance",
     data={"message": "Scheduled maintenance in 5 minutes"}
@@ -1352,8 +1372,8 @@ await broker.publish(
                     </h2>
 
                     <p>
-                        Protect your SSE endpoint by providing an authorization callback that validates whether a user
-                        can subscribe to specific topics:
+                        Protect SSE subscriptions by providing an authorization callback that validates whether a user
+                        can subscribe to specific topics. Pass this to the <code>SSEApp</code> constructor:
                     </p>
 
                     <div class="code-block">
@@ -1364,46 +1384,52 @@ await broker.publish(
                                 Copy
                             </button>
                         </div>
-                        <pre><code class="language-python">from fastapi import Request, HTTPException
-from fastapi_sse_events import mount_sse, RealtimeConfig
+                        <pre><code class="language-python">from fastapi import Request
+from fastapi_sse_events import SSEApp
 
-async def authorize_sse(request: Request, topic: str) -> bool:
+async def authorize_subscription(request: Request, topic: str) -> bool:
     """
-    Called for each topic a client wants to subscribe to.
-    Return True to allow, False to deny.
-    Raise HTTPException for authentication errors.
+    Authorization callback - return True to allow, False to deny.
+    Called for each topic subscription attempt.
     """
-    # Get user from request (JWT, session, etc.)
+    # Get current user (implement based on your auth method)
     user = await get_current_user(request)
     if not user:
-        raise HTTPException(401, "Unauthorized")
+        return False
     
-    # Check topic permissions
-    if topic.startswith("workspace:"):
-        workspace_id = topic.split(":")[1]
-        if not await user_has_workspace_access(user, workspace_id):
-            return False
-    
+    # Allow user to subscribe to their own topic
     if topic.startswith("user:"):
         user_id = topic.split(":")[1]
-        if user_id != str(user.id):
-            return False  # Users can only subscribe to their own updates
+        return str(user.id) == user_id
     
-    # Default: allow
-    return True
+    # Check workspace membership
+    if topic.startswith("workspace:"):
+        workspace_id = topic.split(":")[1]
+        return await user_has_workspace_access(user.id, workspace_id)
+    
+    # Broadcast topics - anyone can subscribe
+    if topic in ["announcements", "system"]:
+        return True
+    
+    # Deny by default
+    return False
 
-# Mount SSE with authorization
-mount_sse(app, config, authorize=authorize_sse)</code></pre>
+# Create app with authorization
+app = SSEApp(
+    redis_url="redis://localhost:6379/0",
+    authorize=authorize_subscription  # Pass authorization callback
+)</code></pre>
                     </div>
 
                     <div class="warning-card">
                         <h4><i class="fas fa-shield-alt"></i> Security Best Practices</h4>
                         <ul>
-                            <li>Always validate user authentication in the authorize callback</li>
-                            <li>Use granular topic patterns (e.g., "workspace:123") that include resource IDs</li>
-                            <li>Don't allow wildcard subscriptions without careful consideration</li>
-                            <li>Log authorization failures for security monitoring</li>
-                            <li>Consider rate limiting SSE connections per user</li>
+                            <li>✅ Always validate user authentication before checking permissions</li>
+                            <li>✅ Use granular topic patterns (e.g., "workspace:123") that include resource IDs</li>
+                            <li>✅ Log authorization failures for security monitoring</li>
+                            <li>✅ Consider rate limiting SSE connections per user</li>
+                            <li>❌ Don't allow wildcard subscriptions without explicit auth</li>
+                            <li>❌ Never trust client-supplied topic names</li>
                         </ul>
                     </div>
                 </section>
@@ -1416,10 +1442,71 @@ mount_sse(app, config, authorize=authorize_sse)</code></pre>
                     </h2>
 
                     <p>
-                        Topics are string identifiers that route events to subscribers. Use the
-                        <code>TopicBuilder</code> helper for common patterns:
+                        Topics are simple string identifiers that route events to subscribers. Use consistent naming conventions across your application.
                     </p>
 
+                    <h3 class="subsection-title">Simple Topic Strings</h3>
+                    <p>Just use strings directly - no special helpers required:</p>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Python</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-python"># Simple topics
+await app.state.event_broker.publish(
+    topic="comments",  # Broadcast to all subscribers
+    event="comment:created",
+    data={"id": 1, "text": "Hello"}
+)
+
+# With resource IDs for granularity
+await app.state.event_broker.publish(
+    topic="comment:123",  # Specific comment
+    event="updated",
+    data={"text": "Edited"}
+)
+
+# Workspace-specific
+await app.state.event_broker.publish(
+    topic="workspace:acme-corp",
+    event="task:created",
+    data={"id": 456, "title": "New Task"}
+)</code></pre>
+                    </div>
+
+                    <h3 class="subsection-title">Topic Naming Conventions</h3>
+
+                    <div class="feature-grid">
+                        <div class="search-type-card">
+                            <div class="search-type-icon"><i class="fas fa-tag"></i></div>
+                            <h4>Simple Broadcast</h4>
+                            <p>Topic for broadcasting to everyone: <code>comments</code>, <code>tasks</code>, <code>announcements</code></p>
+                        </div>
+
+                        <div class="search-type-card">
+                            <div class="search-type-icon"><i class="fas fa-fingerprint"></i></div>
+                            <h4>Resource-Specific</h4>
+                            <p>Include resource IDs for security: <code>comment:123</code>, <code>task:456</code>, <code>user:john</code></p>
+                        </div>
+
+                        <div class="search-type-card">
+                            <div class="search-type-icon"><i class="fas fa-sitemap"></i></div>
+                            <h4>Namespace Hierarchy</h4>
+                            <p>Use colons to group related topics: <code>workspace:wsp1</code>, <code>org:org1:team:dev</code></p>
+                        </div>
+
+                        <div class="search-type-card">
+                            <div class="search-type-icon"><i class="fas fa-broadcast-tower"></i></div>
+                            <h4>System Topics</h4>
+                            <p>Reserved topics for app-wide events: <code>broadcast</code>, <code>global</code>, <code>system</code></p>
+                        </div>
+                    </div>
+
+                    <h3 class="subsection-title">Using TopicBuilder (Optional)</h3>
+                    <p>For consistency, you can optionally use the <code>TopicBuilder</code> helper:</p>
                     <div class="code-block">
                         <div class="code-header">
                             <span>Python</span>
@@ -1430,66 +1517,36 @@ mount_sse(app, config, authorize=authorize_sse)</code></pre>
                         </div>
                         <pre><code class="language-python">from fastapi_sse_events import TopicBuilder
 
-# Built-in patterns
-TopicBuilder.comment_thread("thread-123")  # → "comment-thread:thread-123"
-TopicBuilder.ticket("ticket-456")          # → "ticket:ticket-456"
-TopicBuilder.task("task-789")              # → "task:task-789"
-TopicBuilder.workspace("workspace-42")     # → "workspace:workspace-42"
-TopicBuilder.user("user-99")               # → "user:user-99"
+# Built-in patterns (all optional)
+TopicBuilder.comment("c123")        # → "comment:c123"
+TopicBuilder.task("t456")           # → "task:t456"
+TopicBuilder.workspace("ws789")     # → "workspace:ws789"
+TopicBuilder.user("john")           # → "user:john"
 
 # Custom topics
-TopicBuilder.custom("invoice", "inv-001")  # → "invoice:inv-001"</code></pre>
+TopicBuilder.custom("invoice", "inv001")  # → "invoice:inv001"</code></pre>
                     </div>
 
-                    <h3 class="subsection-title">Topic Design Guidelines</h3>
-
-                    <div class="feature-grid">
-                        <div class="search-type-card">
-                            <div class="search-type-icon"><i class="fas fa-sitemap"></i></div>
-                            <h4>Hierarchical</h4>
-                            <p>Use colons to create namespace hierarchy: <code>workspace:42:task:123</code></p>
-                        </div>
-
-                        <div class="search-type-card">
-                            <div class="search-type-icon"><i class="fas fa-fingerprint"></i></div>
-                            <h4>Resource-Specific</h4>
-                            <p>Include resource IDs for fine-grained subscriptions: <code>user:john</code></p>
-                        </div>
-
-                        <div class="search-type-card">
-                            <div class="search-type-icon"><i class="fas fa-broadcast-tower"></i></div>
-                            <h4>Broadcast Topics</h4>
-                            <p>Use special topics for app-wide events: <code>global</code>, <code>system</code></p>
-                        </div>
-
-                        <div class="search-type-card">
-                            <div class="search-type-icon"><i class="fas fa-layer-group"></i></div>
-                            <h4>Multi-Level</h4>
-                            <p>Clients can subscribe to multiple topics: <code>?topics=task:1,task:2,workspace:5</code>
-                            </p>
-                        </div>
-                    </div>
-
-                    <h3 class="subsection-title">Examples</h3>
+                    <h3 class="subsection-title">Client Subscriptions</h3>
                     <div class="code-block">
                         <div class="code-header">
-                            <span>Topic Usage</span>
+                            <span>JavaScript</span>
                             <button class="copy-btn">
                                 <i class="fas fa-copy"></i>
                                 Copy
                             </button>
                         </div>
-                        <pre><code class="language-javascript">// Subscribe to specific task
-new EventSource('/sse?topics=task:123')
+                        <pre><code class="language-javascript">// Subscribe to broadcast topic
+new EventSource('/events?topic=comments')
 
-// Subscribe to workspace activity
-new EventSource('/sse?topics=workspace:42')
+// Subscribe to specific resource
+new EventSource('/events?topic=comment:123')
 
-// Subscribe to multiple topics
-new EventSource('/sse?topics=task:1,task:2,user:john')
+// Subscribe to workspace
+new EventSource('/events?topic=workspace:acme-corp')
 
-// Subscribe to broadcast + specific
-new EventSource('/sse?topics=global,workspace:42')</code></pre>
+// Subscribe to multiple topics (comma-separated)
+new EventSource('/events?topic=comment:123,workspace:acme-corp')</code></pre>
                     </div>
                 </section>
 
@@ -1500,7 +1557,7 @@ new EventSource('/sse?topics=global,workspace:42')</code></pre>
                         Configuration
                     </h2>
 
-                    <p>Configure SSE behavior using the <code>RealtimeConfig</code> class:</p>
+                    <p>The <code>SSEApp</code> class provides simple one-line configuration with sensible defaults:</p>
 
                     <div class="code-block">
                         <div class="code-header">
@@ -1510,23 +1567,26 @@ new EventSource('/sse?topics=global,workspace:42')</code></pre>
                                 Copy
                             </button>
                         </div>
-                        <pre><code class="language-python">from fastapi_sse_events import RealtimeConfig
+                        <pre><code class="language-python">from fastapi_sse_events import SSEApp
+import os
 
-config = RealtimeConfig(
-    redis_url="redis://localhost:6379",    # Redis connection
-    heartbeat_seconds=30,                   # Keepalive interval
-    sse_path="/sse",                        # SSE endpoint path
-    topic_prefix="myapp",                   # Topic namespace
-    redis_max_retries=5,                    # Connection retries
-    redis_retry_delay=1.0                   # Retry delay (seconds)
+# Minimal setup
+app = SSEApp(redis_url="redis://localhost:6379/0")
+
+# Full configuration
+app = SSEApp(
+    title="My API",
+    redis_url=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+    heartbeat_seconds=30,              # SSE keepalive interval (5-60s)
+    authorize=authorize_subscription,   # Authorization callback (optional)
 )</code></pre>
                     </div>
 
-                    <h3 class="subsection-title">Configuration Options</h3>
+                    <h3 class="subsection-title">Configuration Parameters</h3>
                     <table>
                         <thead>
                             <tr>
-                                <th>Option</th>
+                                <th>Parameter</th>
                                 <th>Type</th>
                                 <th>Default</th>
                                 <th>Description</th>
@@ -1534,9 +1594,15 @@ config = RealtimeConfig(
                         </thead>
                         <tbody>
                             <tr>
+                                <td><code>title</code></td>
+                                <td>str</td>
+                                <td>"FastAPI"</td>
+                                <td>App title (optional)</td>
+                            </tr>
+                            <tr>
                                 <td><code>redis_url</code></td>
                                 <td>str</td>
-                                <td>Required</td>
+                                <td>⚠️ Required</td>
                                 <td>Redis connection URL</td>
                             </tr>
                             <tr>
@@ -1546,34 +1612,16 @@ config = RealtimeConfig(
                                 <td>SSE keepalive interval (5-60)</td>
                             </tr>
                             <tr>
-                                <td><code>sse_path</code></td>
-                                <td>str</td>
-                                <td>"/sse"</td>
-                                <td>SSE endpoint path</td>
-                            </tr>
-                            <tr>
-                                <td><code>topic_prefix</code></td>
-                                <td>str</td>
-                                <td>""</td>
-                                <td>Namespace for all topics</td>
-                            </tr>
-                            <tr>
-                                <td><code>redis_max_retries</code></td>
-                                <td>int</td>
-                                <td>5</td>
-                                <td>Max Redis connection retries</td>
-                            </tr>
-                            <tr>
-                                <td><code>redis_retry_delay</code></td>
-                                <td>float</td>
-                                <td>1.0</td>
-                                <td>Retry delay in seconds</td>
+                                <td><code>authorize</code></td>
+                                <td>callable</td>
+                                <td>None</td>
+                                <td>Authorization callback function</td>
                             </tr>
                         </tbody>
                     </table>
 
                     <h3 class="subsection-title">Environment Variables</h3>
-                    <p>Configuration can be loaded from environment variables with <code>SSE_</code> prefix:</p>
+                    <p>Load configuration from environment variables:</p>
 
                     <div class="code-block">
                         <div class="code-header">
@@ -1583,10 +1631,33 @@ config = RealtimeConfig(
                                 Copy
                             </button>
                         </div>
-                        <pre><code class="language-bash">SSE_REDIS_URL=redis://localhost:6379
+                        <pre><code class="language-bash"># Development
+REDIS_URL=redis://localhost:6379/0
 SSE_HEARTBEAT_SECONDS=30
-SSE_PATH=/events
-SSE_TOPIC_PREFIX=production</code></pre>
+
+# Production (with authentication)
+REDIS_URL=redis://:password@redis-prod.example.com:6379/0
+SSE_HEARTBEAT_SECONDS=60</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Python</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-python">from dotenv import load_dotenv
+import os
+from fastapi_sse_events import SSEApp
+
+load_dotenv()  # Load .env file
+
+app = SSEApp(
+    redis_url=os.getenv("REDIS_URL"),
+    heartbeat_seconds=int(os.getenv("SSE_HEARTBEAT_SECONDS", "30")),
+)</code></pre>
                     </div>
                 </section>
 
@@ -1597,7 +1668,7 @@ SSE_TOPIC_PREFIX=production</code></pre>
                         JavaScript Client
                     </h2>
 
-                    <p>Use the native <code>EventSource</code> API in the browser:</p>
+                    <p>Use the native <code>EventSource</code> API in the browser for simple, efficient real-time updates:</p>
 
                     <div class="code-block">
                         <div class="code-header">
@@ -1607,47 +1678,53 @@ SSE_TOPIC_PREFIX=production</code></pre>
                                 Copy
                             </button>
                         </div>
-                        <pre><code class="language-javascript">// Initialize connection
-const eventSource = new EventSource('/sse?topics=workspace:42');
+                        <pre><code class="language-javascript">// Create SSE connection
+const eventSource = new EventSource('/events?topic=comments');
 
-// Listen for specific event types
-eventSource.addEventListener('task:created', (event) => {
-  const data = JSON.parse(event.data);
-  console.log('Task created:', data);
-  
-  // Refresh UI
-  addTaskToUI(data.id);
-});
-
-eventSource.addEventListener('task:updated', (event) => {
-  const data = JSON.parse(event.data);
-  console.log('Task updated:', data);
-  
-  // Update existing task in UI
-  updateTaskInUI(data.id);
-});
-
-// Connection lifecycle
+// Listen for connection events
 eventSource.addEventListener('open', () => {
-  console.log('✅ SSE Connected');
-  document.getElementById('status').textContent = 'Connected';
+  console.log('✅ Connected to SSE');
+  updateStatus('Connected');
 });
 
 eventSource.addEventListener('error', (error) => {
   console.error('❌ SSE Error:', error);
-  document.getElementById('status').textContent = 'Disconnected';
-  // EventSource automatically attempts reconnection
+  updateStatus('Disconnected');
+  // EventSource automatically reconnects
 });
 
-// Heartbeat (optional - for debugging)
+// Listen for specific events
+eventSource.addEventListener('comment:created', (event) => {
+  const data = JSON.parse(event.data);
+  console.log('New comment:', data);
+  
+  // Fetch and display the new comment
+  fetch(`/comments/${data.id}`)
+    .then(r => r.json())
+    .then(comment => addCommentToDOM(comment));
+});
+
+eventSource.addEventListener('comment:updated', (event) => {
+  const data = JSON.parse(event.data);
+  updateCommentInDOM(data.id, data);
+});
+
 eventSource.addEventListener('heartbeat', () => {
-  console.log('💓 Heartbeat received');
+  console.log('💓 Heartbeat');
 });
 
-// Clean up when done
-function cleanup() {
+// Subscribe to multiple topics
+const topics = ['comments', 'notifications'];
+const eventSource2 = new EventSource(
+  `/events?topic=${topics.join(',')}`
+);
+
+// Cleanup
+function closeConnection() {
   eventSource.close();
-}</code></pre>
+  eventSource2.close();
+}
+window.addEventListener('beforeunload', closeConnection);</code></pre>
                     </div>
 
                     <div class="info-card">
@@ -1667,89 +1744,85 @@ function cleanup() {
                         React Client
                     </h2>
 
-                    <p>Create a custom hook for managing SSE connections in React:</p>
+                    <p>Create a reusable React hook for managing SSE connections:</p>
 
                     <div class="code-block">
                         <div class="code-header">
-                            <span>useSSE.ts</span>
+                            <span>useSSE.tsx</span>
                             <button class="copy-btn">
                                 <i class="fas fa-copy"></i>
                                 Copy
                             </button>
                         </div>
-                        <pre><code class="language-typescript">import { useEffect, useCallback, useState } from 'react';
+                        <pre><code class="language-typescript">import { useEffect, useState, useCallback } from 'react';
 
 interface UseSSEOptions {
-  topics: string[];
-  onEvent?: (event: string, data: any) => void;
+  topic: string;
+  onEvent?: (eventType: string, data: any) => void;
 }
 
-export function useSSE({ topics, onEvent }: UseSSEOptions) {
+export function useSSE({ topic, onEvent }: UseSSEOptions) {
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    const topicsParam = topics.join(',');
-    const eventSource = new EventSource(`/sse?topics=${topicsParam}`);
+    const eventSource = new EventSource(`/events?topic=${topic}`);
 
-    // Connection opened
     eventSource.addEventListener('open', () => {
       setConnected(true);
       setError(null);
     });
 
-    // Connection error
-    eventSource.addEventListener('error', (e) => {
+    eventSource.addEventListener('error', () => {
       setConnected(false);
       setError(new Error('SSE connection error'));
     });
 
-    // Generic message handler
+    // Forward all events to callback
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
       onEvent?.(event.type, data);
     };
 
-    // Cleanup
-    return () => {
-      eventSource.close();
-    };
-  }, [topics.join(','), onEvent]);
+    return () => eventSource.close();
+  }, [topic, onEvent]);
 
   return { connected, error };
 }
 
-// Usage in component
-export function TaskList({ workspaceId }: { workspaceId: string }) {
-  const [tasks, setTasks] = useState([]);
+// Usage example
+export function CommentThread({ threadId }: { threadId: number }) {
+  const [comments, setComments] = useState<any[]>([]);
 
-  const handleSSE = useCallback((event: string, data: any) => {
-    if (event === 'task:created') {
-      // Fetch new task and add to list
-      fetchTask(data.id).then(task => {
-        setTasks(prev => [...prev, task]);
-      });
-    } else if (event === 'task:updated') {
-      // Refresh updated task
-      fetchTask(data.id).then(updatedTask => {
-        setTasks(prev => prev.map(t => 
-          t.id === updatedTask.id ? updatedTask : t
-        ));
-      });
+  const handleEvent = useCallback((eventType: string, data: any) => {
+    if (['comment:created', 'comment:updated'].includes(eventType)) {
+      // Refresh comments from API
+      fetchComments();
     }
   }, []);
 
-  useSSE({
-    topics: [`workspace:${workspaceId}`],
-    onEvent: handleSSE
-  });
+  const { connected } = useSSE(
+    { topic: `comment_thread:${threadId}`, onEvent: handleEvent }
+  );
+
+  useEffect(() => {
+    fetchComments();
+  }, [threadId]);
+
+  const fetchComments = async () => {
+    const res = await fetch(`/comments?thread_id=${threadId}`);
+    setComments(await res.json());
+  };
 
   return (
-    <ul>
-      {tasks.map(task => (
-        <li key={task.id}>{task.title}</li>
+    <div>
+      <span style={{ color: connected ? 'green' : 'red' }}>
+        {connected ? '🟢 Live' : '🔴 Offline'}
+      </span>
+      {comments.map(c => (
+        <div key={c.id}>{c.content}</div>
       ))}
-    </ul>
+    </div>
   );
 }</code></pre>
                     </div>
@@ -1762,7 +1835,7 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
                         Python Client
                     </h2>
 
-                    <p>Connect to SSE from Python using <code>httpx</code> or <code>sseclient-py</code>:</p>
+                    <p>Connect to SSE from Python using <code>httpx</code> or <code>sseclient-py</code> library:</p>
 
                     <div class="code-block">
                         <div class="code-header">
@@ -1775,21 +1848,24 @@ export function TaskList({ workspaceId }: { workspaceId: string }) {
                         <pre><code class="language-python">import httpx
 import json
 
-async def listen_sse():
+async def listen_to_sse():
+    """Listen to SSE events using httpx."""
     async with httpx.AsyncClient() as client:
         async with client.stream(
-            'GET',
-            'http://localhost:8000/sse?topics=workspace:42',
-            headers={'Accept': 'text/event-stream'}
+            "GET",
+            "http://localhost:8000/events?topic=comments",
+            headers={"Accept": "text/event-stream"}
         ) as response:
             async for line in response.aiter_lines():
-                if line.startswith('data:'):
+                if line.startswith("event:"):
+                    event_type = line[7:].strip()
+                elif line.startswith("data:"):
                     data_str = line[5:].strip()
-                    data = json.loads(data_str)
-                    print(f"Event received: {data}")
-                elif line.startswith('event:'):
-                    event_type = line[6:].strip()
-                    print(f"Event type: {event_type}")</code></pre>
+                    try:
+                        data = json.loads(data_str)
+                        print(f"Event {event_type}: {data}")
+                    except json.JSONDecodeError:
+                        pass</code></pre>
                     </div>
 
                     <div class="code-block">
@@ -1803,12 +1879,18 @@ async def listen_sse():
                         <pre><code class="language-python">from sseclient import SSEClient
 import json
 
-url = 'http://localhost:8000/sse?topics=workspace:42'
+def listen_to_events():
+    """Simple SSE listening using sseclient-py."""
+    url = "http://localhost:8000/events?topic=comments"
+    
+    for event in SSEClient(url):
+        if event.event != "heartbeat":
+            data = json.loads(event.data)
+            print(f"Event: {event.event}")
+            print(f"Data: {data}")
 
-for event in SSEClient(url):
-    if event.event != 'heartbeat':
-        data = json.loads(event.data)
-        print(f"Event: {event.event}, Data: {data}")</code></pre>
+# Run it
+listen_to_events()</code></pre>
                     </div>
                 </section>
 
@@ -2125,8 +2207,8 @@ CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]</code></pre>
                         API Reference
                     </h2>
 
-                    <h3 class="subsection-title">mount_sse()</h3>
-                    <p>Mount SSE endpoint and lifecycle handlers to your FastAPI app.</p>
+                    <h3 class="subsection-title">SSEApp (Recommended)</h3>
+                    <p>FastAPI subclass with built-in SSE support and automatic setup:</p>
 
                     <div class="code-block">
                         <div class="code-header">
@@ -2136,11 +2218,71 @@ CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]</code></pre>
                                 Copy
                             </button>
                         </div>
-                        <pre><code class="language-python">def mount_sse(
-    app: FastAPI,
-    config: RealtimeConfig,
-    authorize: AuthorizeFn | None = None
-) -> None</code></pre>
+                        <pre><code class="language-python">class SSEApp(FastAPI):
+    """FastAPI with SSE pre-configured."""
+    
+    def __init__(
+        self,
+        title: str = "API",
+        redis_url: str = "redis://localhost:6379/0",
+        heartbeat_seconds: int = 30,
+        authorize: Optional[AuthorizeFn] = None,
+        **kwargs
+    )</code></pre>
+                    </div>
+
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Parameter</th>
+                                <th>Type</th>
+                                <th>Default</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>title</code></td>
+                                <td>str</td>
+                                <td>"API"</td>
+                                <td>Application title</td>
+                            </tr>
+                            <tr>
+                                <td><code>redis_url</code></td>
+                                <td>str</td>
+                                <td>redis://localhost:6379/0</td>
+                                <td>Redis connection URL</td>
+                            </tr>
+                            <tr>
+                                <td><code>heartbeat_seconds</code></td>
+                                <td>int</td>
+                                <td>30</td>
+                                <td>SSE keepalive interval (5-60)</td>
+                            </tr>
+                            <tr>
+                                <td><code>authorize</code></td>
+                                <td>AuthorizeFn | None</td>
+                                <td>None</td>
+                                <td>Optional authorization callback</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h3 class="subsection-title">@publish_event()</h3>
+                    <p>Automatically publish endpoint response as SSE event:</p>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Python</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-python">@publish_event(
+    topic: str,
+    event: str
+)</code></pre>
                     </div>
 
                     <table>
@@ -2153,24 +2295,21 @@ CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]</code></pre>
                         </thead>
                         <tbody>
                             <tr>
-                                <td><code>app</code></td>
-                                <td>FastAPI</td>
-                                <td>Your FastAPI application instance</td>
+                                <td><code>topic</code></td>
+                                <td>str</td>
+                                <td>Topic to publish to</td>
                             </tr>
                             <tr>
-                                <td><code>config</code></td>
-                                <td>RealtimeConfig</td>
-                                <td>SSE configuration</td>
-                            </tr>
-                            <tr>
-                                <td><code>authorize</code></td>
-                                <td>AuthorizeFn | None</td>
-                                <td>Optional authorization callback</td>
+                                <td><code>event</code></td>
+                                <td>str</td>
+                                <td>Event type identifier</td>
                             </tr>
                         </tbody>
                     </table>
 
-                    <h3 class="subsection-title">RealtimeConfig</h3>
+                    <h3 class="subsection-title">@subscribe_to_events()</h3>
+                    <p>Convert endpoint to SSE stream. Use query parameter: <code>?topic=...</code></p>
+
                     <div class="code-block">
                         <div class="code-header">
                             <span>Python</span>
@@ -2179,17 +2318,13 @@ CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]</code></pre>
                                 Copy
                             </button>
                         </div>
-                        <pre><code class="language-python">class RealtimeConfig(BaseSettings):
-    redis_url: str
-    heartbeat_seconds: int = 30
-    sse_path: str = "/sse"
-    topic_prefix: str = ""
-    redis_max_retries: int = 5
-    redis_retry_delay: float = 1.0</code></pre>
+                        <pre><code class="language-python">@subscribe_to_events()
+async def events(request: Request):
+    pass</code></pre>
                     </div>
 
                     <h3 class="subsection-title">EventBroker.publish()</h3>
-                    <p>Publish an event to a topic.</p>
+                    <p>Manually publish event (use decorators when possible):</p>
 
                     <div class="code-block">
                         <div class="code-header">
@@ -2207,8 +2342,8 @@ CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]</code></pre>
 ) -> None</code></pre>
                     </div>
 
-                    <h3 class="subsection-title">TopicBuilder</h3>
-                    <p>Helper class for building topic strings.</p>
+                    <h3 class="subsection-title">TopicBuilder (Optional)</h3>
+                    <p>Helper for consistent topic naming (not required - plain strings work):</p>
 
                     <div class="code-block">
                         <div class="code-header">
@@ -2220,25 +2355,22 @@ CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]</code></pre>
                         </div>
                         <pre><code class="language-python">class TopicBuilder:
     @staticmethod
-    def comment_thread(thread_id: str) -> str
+    def comment(comment_id: str) -> str       # "comment:id"
     
     @staticmethod
-    def ticket(ticket_id: str) -> str
+    def task(task_id: str) -> str             # "task:id"
     
     @staticmethod
-    def task(task_id: str) -> str
+    def workspace(workspace_id: str) -> str   # "workspace:id"
     
     @staticmethod
-    def workspace(workspace_id: str) -> str
+    def user(user_id: str) -> str             # "user:id"
     
     @staticmethod
-    def user(user_id: str) -> str
-    
-    @staticmethod
-    def custom(resource_type: str, resource_id: str) -> str</code></pre>
+    def custom(resource: str, id: str) -> str # "resource:id"</code></pre>
                     </div>
 
-                    <h3 class="subsection-title">EventData</h3>
+                    <h3 class="subsection-title">Type Definitions</h3>
                     <div class="code-block">
                         <div class="code-header">
                             <span>Python</span>
@@ -2247,10 +2379,43 @@ CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]</code></pre>
                                 Copy
                             </button>
                         </div>
-                        <pre><code class="language-python">class EventData(BaseModel):
-    id: str
-    type: str
-    attributes: dict[str, Any] = {}</code></pre>
+                        <pre><code class="language-python"># Authorization callback type
+AuthorizeFn = Callable[[Request, str], Awaitable[bool]]
+
+# Example authorization
+async def authorize(request: Request, topic: str) -> bool:
+    """Return True to allow subscription, False to deny."""
+    user = await get_current_user(request)
+    return user is not None
+
+# Event data type
+EventData = dict[str, Any]  # Any JSON-serializable dict</code></pre>
+                    </div>
+
+                    <h3 class="subsection-title">Advanced: Manual Setup</h3>
+                    <p>For complex use cases, manually configure the broker:</p>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span>Python</span>
+                            <button class="copy-btn">
+                                <i class="fas fa-copy"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <pre><code class="language-python">from fastapi import FastAPI
+from fastapi_sse_events import mount_sse, RealtimeConfig
+
+app = FastAPI()
+
+config = RealtimeConfig(
+    redis_url="redis://localhost:6379/0",
+    heartbeat_seconds=30,
+)
+
+broker = mount_sse(app, config, authorize=auth_fn)
+
+# Now use: app.state.event_broker</code></pre>
                     </div>
                 </section>
 
