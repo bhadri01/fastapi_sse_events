@@ -37,10 +37,7 @@ class EventBroker:
         self.redis = redis_backend
 
         # Fan-out manager for efficient subscriptions
-        self._fanout = FanOutManager(
-            redis_backend,
-            max_queue_size=config.max_queue_size
-        )
+        self._fanout = FanOutManager(redis_backend, max_queue_size=config.max_queue_size)
 
         # Connection tracking
         self._active_connections = 0
@@ -126,7 +123,7 @@ class EventBroker:
         message = event_data.model_dump_json()
 
         # Validate message size
-        message_size = len(message.encode('utf-8'))
+        message_size = len(message.encode("utf-8"))
         if message_size > self.config.max_message_size:
             logger.error(
                 f"Message too large: {message_size} bytes (limit: {self.config.max_message_size})"
@@ -143,14 +140,14 @@ class EventBroker:
             latency_ms = (time.time() - start_time) * 1000
 
             await self._metrics.record_message_published(latency_ms)
-            logger.debug("Published event '%s' to topic '%s' (%.2fms)", event, full_topic, latency_ms)
+            logger.debug(
+                "Published event '%s' to topic '%s' (%.2fms)", event, full_topic, latency_ms
+            )
         except Exception:
             await self._metrics.record_publish_error()
             raise
 
-    async def subscribe(
-        self, topics: list[str]
-    ) -> AsyncGenerator[str, None]:
+    async def subscribe(self, topics: list[str]) -> AsyncGenerator[str, None]:
         """
         Subscribe to topics and yield SSE-formatted messages.
 
@@ -174,9 +171,7 @@ class EventBroker:
         # Check connection limit
         async with self._connection_lock:
             if self._active_connections >= self.config.max_connections:
-                logger.warning(
-                    f"Max connections ({self.config.max_connections}) reached"
-                )
+                logger.warning(f"Max connections ({self.config.max_connections}) reached")
                 await self._metrics.record_connection_rejected()
                 raise RuntimeError("Maximum concurrent connections exceeded")
             self._active_connections += 1
@@ -223,7 +218,9 @@ class EventBroker:
                 self._active_connections -= 1
 
             await self._metrics.record_connection_closed()
-            logger.info(f"Active connections: {self._active_connections}/{self.config.max_connections}")
+            logger.info(
+                f"Active connections: {self._active_connections}/{self.config.max_connections}"
+            )
 
     async def _shared_heartbeat_loop(self) -> None:
         """

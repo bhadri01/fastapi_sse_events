@@ -13,8 +13,8 @@ from fastapi_sse_events.broker import EventBroker
 
 logger = logging.getLogger(__name__)
 
-P = ParamSpec('P')
-T = TypeVar('T')
+P = ParamSpec("P")
+T = TypeVar("T")
 
 
 def publish_event(
@@ -61,6 +61,7 @@ def publish_event(
             return update_comment_in_db(id, comment)
         ```
     """
+
     def decorator(func: Callable[P, T]) -> Callable[P, T]:
         @wraps(func)
         async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
@@ -193,6 +194,7 @@ def subscribe_to_events(
             pass
         ```
     """
+
     def decorator(func: Callable[..., Any]) -> Callable[..., EventSourceResponse]:
         @wraps(func)
         async def wrapper(request: Request, **_kwargs: Any) -> EventSourceResponse:
@@ -222,7 +224,7 @@ def subscribe_to_events(
                 try:
                     auth_results = await asyncio.gather(
                         *[authorize(request, topic_name) for topic_name in subscribe_topics],
-                        return_exceptions=True
+                        return_exceptions=True,
                     )
 
                     for topic_name, result in zip(subscribe_topics, auth_results, strict=False):
@@ -230,12 +232,12 @@ def subscribe_to_events(
                             logger.error(f"Authorization failed for {topic_name}: {result}")
                             raise HTTPException(
                                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                                detail="Authorization check failed"
+                                detail="Authorization check failed",
                             )
                         if not result:
                             raise HTTPException(
                                 status_code=status.HTTP_403_FORBIDDEN,
-                                detail=f"Not authorized to access topic: {topic_name}"
+                                detail=f"Not authorized to access topic: {topic_name}",
                             )
                 except HTTPException:
                     raise
@@ -243,7 +245,7 @@ def subscribe_to_events(
                     logger.error(f"Authorization error: {e}")
                     raise HTTPException(
                         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail="Authorization failed"
+                        detail="Authorization failed",
                     ) from e
 
             # Create event generator

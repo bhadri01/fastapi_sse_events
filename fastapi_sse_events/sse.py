@@ -74,7 +74,7 @@ def create_sse_endpoint(
                 # Run all authorization checks in parallel
                 auth_results = await asyncio.gather(
                     *[authorize_fn(request, topic_name) for topic_name in topics],
-                    return_exceptions=True
+                    return_exceptions=True,
                 )
 
                 # Check results

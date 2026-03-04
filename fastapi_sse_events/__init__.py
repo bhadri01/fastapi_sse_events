@@ -56,28 +56,22 @@ __all__ = [
     "SSEApp",
     "EventBroker",
     "RealtimeConfig",
-
     # Decorators (Recommended)
     "publish_event",
     "subscribe_to_events",
-
     # Advanced
     "mount_sse",
     "TopicBuilder",
-
     # Types
     "AuthorizeFn",
     "EventData",
-
     # Monitoring
     "create_health_router",
     "MetricsCollector",
     "get_metrics_collector",
-
     # Legacy (Deprecated but maintained for compatibility)
     "sse_event",
     "sse_endpoint",
-
     # Metadata
     "__version__",
     "__author__",

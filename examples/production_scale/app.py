@@ -36,8 +36,8 @@ config = RealtimeConfig(
     redis_url="redis://redis-cluster:7001,redis-cluster:7002,redis-cluster:7003/0",
     heartbeat_seconds=30,  # Longer heartbeat for efficiency
     max_connections=10000,  # 10K per instance
-    max_queue_size=50,      # Lower memory per client
-    max_message_size=32768, # 32KB max
+    max_queue_size=50,  # Lower memory per client
+    max_message_size=32768,  # 32KB max
 )
 
 # Mount SSE with health checks enabled
@@ -54,6 +54,7 @@ counter = 0
 
 class DataItem(BaseModel):
     """Data item model."""
+
     id: int
     topic: str
     content: str
@@ -78,7 +79,7 @@ async def root():
             "for_100k_users": "Deploy 10-15 instances behind load balancer",
             "redis": "Use Redis Cluster with 3-5 nodes",
             "monitoring": "Scrape /metrics/prometheus with Prometheus",
-        }
+        },
     }
 
 

@@ -138,7 +138,9 @@ class MetricsCollector:
             if self._publish_latencies:
                 sorted_latencies = sorted(self._publish_latencies)
                 p95_index = int(len(sorted_latencies) * 0.95)
-                p95_latency = sorted_latencies[p95_index] if p95_index < len(sorted_latencies) else 0
+                p95_latency = (
+                    sorted_latencies[p95_index] if p95_index < len(sorted_latencies) else 0
+                )
 
             return {
                 "uptime_seconds": uptime_seconds,

@@ -179,7 +179,7 @@ async def get_thread_comments(thread_id: int):
         "thread_id": result.thread_id,
         "author": result.author,
         "timestamp": result.created_at,
-    }
+    },
 )
 async def create_comment(_request: Request, thread_id: int, comment: CommentCreate):
     """Create a new comment and notify subscribers via SSE (automatic via decorator)."""
@@ -222,7 +222,7 @@ async def create_comment(_request: Request, thread_id: int, comment: CommentCrea
         "comment_id": result.id,
         "thread_id": result.thread_id,
         "timestamp": result.updated_at,
-    }
+    },
 )
 async def update_comment(_request: Request, comment_id: str, comment_update: CommentUpdate):
     """Update a comment and notify subscribers via SSE (automatic via decorator)."""
@@ -250,7 +250,7 @@ async def update_comment(_request: Request, comment_id: str, comment_update: Com
         "comment_id": result["comment_id"],
         "thread_id": result["thread_id"],
         "timestamp": result["timestamp"],
-    }
+    },
 )
 async def delete_comment(_request: Request, comment_id: str):
     """Delete a comment and notify subscribers via SSE (automatic via decorator)."""

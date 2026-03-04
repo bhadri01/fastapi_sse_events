@@ -35,6 +35,7 @@ comment_id = 0
 
 class CommentCreate(BaseModel):
     """Create comment request."""
+
     thread_id: int
     author: str
     content: str
@@ -42,6 +43,7 @@ class CommentCreate(BaseModel):
 
 class Comment(BaseModel):
     """Comment response."""
+
     id: int
     thread_id: int
     author: str
@@ -107,4 +109,5 @@ async def events_endpoint(request: Request):
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

@@ -48,7 +48,9 @@ class LoadTestResults:
         print("\nConnections:")
         print(f"  Established: {self.connections_established}")
         print(f"  Failed: {self.connections_failed}")
-        print(f"  Success Rate: {self.connections_established / (self.connections_established + self.connections_failed) * 100:.1f}%")
+        print(
+            f"  Success Rate: {self.connections_established / (self.connections_established + self.connections_failed) * 100:.1f}%"
+        )
         print("\nMessages:")
         print(f"  Published: {self.messages_published}")
         print(f"  Received: {self.messages_received}")
@@ -58,7 +60,9 @@ class LoadTestResults:
         print(f"  Maximum: {self.max_latency_ms:.2f}ms")
         print("\nThroughput:")
         print(f"  Messages/sec: {self.messages_received / self.duration_seconds:.1f}")
-        print(f"  Per Connection: {self.messages_received / max(1, self.connections_established):.1f}")
+        print(
+            f"  Per Connection: {self.messages_received / max(1, self.connections_established):.1f}"
+        )
         print("=" * 60)
 
 
@@ -84,7 +88,10 @@ class SSEClient:
 
         try:
             timeout = aiohttp.ClientTimeout(total=duration + 10)
-            async with aiohttp.ClientSession(timeout=timeout) as session, session.get(url) as response:
+            async with (
+                aiohttp.ClientSession(timeout=timeout) as session,
+                session.get(url) as response,
+            ):
                 if response.status != 200:
                     self.results.connections_failed += 1
                     return
@@ -191,9 +198,7 @@ async def run_load_test(config: LoadTestConfig) -> LoadTestResults:
 
     # Create tasks for all clients and publisher
     client_tasks = [
-        asyncio.create_task(
-            client.connect_and_listen(config.test_duration_seconds)
-        )
+        asyncio.create_task(client.connect_and_listen(config.test_duration_seconds))
         for client in clients
     ]
 
@@ -227,7 +232,10 @@ async def run_load_test(config: LoadTestConfig) -> LoadTestResults:
 async def check_health(base_url: str) -> bool:
     """Check if server is healthy."""
     try:
-        async with aiohttp.ClientSession() as session, session.get(f"{base_url}/health") as response:
+        async with (
+            aiohttp.ClientSession() as session,
+            session.get(f"{base_url}/health") as response,
+        ):
             return response.status == 200
     except Exception as e:
         print(f"Health check failed: {e}")
@@ -237,7 +245,10 @@ async def check_health(base_url: str) -> bool:
 async def get_metrics(base_url: str) -> dict:
     """Get current metrics from server."""
     try:
-        async with aiohttp.ClientSession() as session, session.get(f"{base_url}/metrics") as response:
+        async with (
+            aiohttp.ClientSession() as session,
+            session.get(f"{base_url}/metrics") as response,
+        ):
             if response.status == 200:
                 return await response.json()
     except Exception:

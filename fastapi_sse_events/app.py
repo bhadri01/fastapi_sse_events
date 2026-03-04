@@ -112,6 +112,7 @@ class SSEApp(FastAPI):
                 final_cors_origins = env_origins.split(",") if env_origins != "*" else ["*"]
 
             from fastapi.middleware.cors import CORSMiddleware
+
             self.add_middleware(
                 CORSMiddleware,
                 allow_origins=final_cors_origins,

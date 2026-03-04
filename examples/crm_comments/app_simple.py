@@ -100,9 +100,7 @@ async def create_comment(_request: Request, comment: CommentCreate) -> Comment:
 @app.put("/comments/{comment_id}", response_model=Comment)
 @sse_event(topic="comments", event="comment_updated")  # Auto-publish on update
 async def update_comment(
-    _request: Request,
-    comment_id: str,
-    comment_update: CommentUpdate
+    _request: Request, comment_id: str, comment_update: CommentUpdate
 ) -> Comment:
     """
     Update a comment.

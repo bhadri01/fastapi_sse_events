@@ -16,20 +16,19 @@ from fastapi_sse_events import SSEApp, publish_event, subscribe_to_events
 
 # One-line setup with automatic SSE configuration!
 # No manual broker setup, no lifecycle management needed.
-app = SSEApp(
-    title="Quick Start SSE Example",
-    redis_url="redis://localhost:6379"
-)
+app = SSEApp(title="Quick Start SSE Example", redis_url="redis://localhost:6379")
 
 
 class TaskCreate(BaseModel):
     """Task creation request (no id needed - auto-generated)."""
+
     title: str
     description: str = ""
 
 
 class Task(BaseModel):
     """Task response model (includes auto-generated id)."""
+
     id: int
     title: str
     description: str = ""
@@ -385,7 +384,7 @@ id: test-1
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-        }
+        },
     )
 
 
@@ -415,9 +414,7 @@ async def create_task(_request: Request, task: TaskCreate):
 @app.get("/tasks")
 async def list_tasks():
     """List all tasks."""
-    return {
-        "tasks": list(tasks.values())
-    }
+    return {"tasks": list(tasks.values())}
 
 
 @app.get("/tasks/{task_id}", response_model=Task)
@@ -425,6 +422,7 @@ async def get_task(task_id: int):
     """Get a specific task."""
     if task_id not in tasks:
         from fastapi import HTTPException
+
         raise HTTPException(status_code=404, detail="Task not found")
     return tasks[task_id]
 
@@ -437,6 +435,7 @@ async def update_task(_request: Request, task_id: int, task_update: TaskCreate):
     """
     if task_id not in tasks:
         from fastapi import HTTPException
+
         raise HTTPException(status_code=404, detail="Task not found")
 
     task = Task(id=task_id, title=task_update.title, description=task_update.description)
@@ -454,6 +453,7 @@ async def delete_task(_request: Request, task_id: int):
     """
     if task_id not in tasks:
         from fastapi import HTTPException
+
         raise HTTPException(status_code=404, detail="Task not found")
 
     deleted = tasks.pop(task_id)
@@ -478,4 +478,5 @@ async def events_endpoint(request: Request):
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

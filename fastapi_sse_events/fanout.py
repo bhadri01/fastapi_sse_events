@@ -58,9 +58,7 @@ class FanOutManager:
             Messages from subscribed topics
         """
         # Create bounded queue for this client
-        client_queue: asyncio.Queue[str | None] = asyncio.Queue(
-            maxsize=self.max_queue_size
-        )
+        client_queue: asyncio.Queue[str | None] = asyncio.Queue(maxsize=self.max_queue_size)
 
         async with self._lock:
             # Register client for each topic
@@ -70,9 +68,7 @@ class FanOutManager:
 
                 # Start Redis subscription if not already running
                 if topic not in self._redis_tasks:
-                    self._redis_tasks[topic] = asyncio.create_task(
-                        self._redis_subscriber(topic)
-                    )
+                    self._redis_tasks[topic] = asyncio.create_task(self._redis_subscriber(topic))
                     logger.debug(f"Started Redis subscription for topic: {topic}")
 
         try:
@@ -116,16 +112,11 @@ class FanOutManager:
                 for client_queue in subscribers:
                     try:
                         # Non-blocking put with timeout
-                        await asyncio.wait_for(
-                            client_queue.put(message),
-                            timeout=0.1
-                        )
+                        await asyncio.wait_for(client_queue.put(message), timeout=0.1)
                     except asyncio.TimeoutError:
                         # Client queue full (slow consumer) - drop message
                         await self._metrics.record_message_dropped()
-                        logger.warning(
-                            f"Dropped message for slow client on topic: {topic}"
-                        )
+                        logger.warning(f"Dropped message for slow client on topic: {topic}")
                     except Exception as e:
                         logger.error(f"Error delivering message: {e}")
 
@@ -143,6 +134,7 @@ class FanOutManager:
         """
         self._event_counter += 1
         import time
+
         timestamp = int(time.time() * 1000)
         return f"{self._instance_id}-{timestamp}-{self._event_counter}"
 
@@ -157,10 +149,7 @@ class FanOutManager:
             return {
                 "active_topics": len(self._subscribers),
                 "total_clients": sum(len(subs) for subs in self._subscribers.values()),
-                "topics": {
-                    topic: len(subs)
-                    for topic, subs in self._subscribers.items()
-                },
+                "topics": {topic: len(subs) for topic, subs in self._subscribers.items()},
             }
 
     async def close(self) -> None:
@@ -172,10 +161,7 @@ class FanOutManager:
 
             # Wait for cancellation
             if self._redis_tasks:
-                await asyncio.gather(
-                    *self._redis_tasks.values(),
-                    return_exceptions=True
-                )
+                await asyncio.gather(*self._redis_tasks.values(), return_exceptions=True)
 
             self._redis_tasks.clear()
             self._subscribers.clear()

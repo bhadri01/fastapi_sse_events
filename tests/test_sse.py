@@ -26,7 +26,10 @@ async def test_sse_endpoint_missing_topic(
         await sse_handler(mock_request, topic=None)
 
     # Should raise HTTPException for missing topic
-    assert "Missing" in str(exc_info.value) or exc_info.value.status_code == status.HTTP_400_BAD_REQUEST
+    assert (
+        "Missing" in str(exc_info.value)
+        or exc_info.value.status_code == status.HTTP_400_BAD_REQUEST
+    )
 
 
 @pytest.mark.asyncio
@@ -35,6 +38,7 @@ async def test_sse_endpoint_unauthorized(
     mock_request: Request,
 ):
     """Test SSE endpoint with unauthorized access."""
+
     # Authorization function that denies access
     async def deny_all(_request: Request, _topic: str) -> bool:
         return False
@@ -55,6 +59,7 @@ async def test_sse_endpoint_authorized(
     _mock_redis_backend: AsyncMock,
 ):
     """Test SSE endpoint with authorized access."""
+
     # Authorization function that allows access
     async def allow_all(_request: Request, _topic: str) -> bool:
         return True
@@ -80,6 +85,7 @@ async def test_sse_endpoint_multiple_topics(
     mock_request: Request,
 ):
     """Test SSE endpoint with multiple topics."""
+
     async def allow_all(_request: Request, _topic: str) -> bool:
         return True
 
@@ -105,6 +111,7 @@ async def test_sse_endpoint_client_disconnect(
     mock_request: Request,
 ):
     """Test SSE endpoint handling client disconnect."""
+
     async def allow_all(_request: Request, _topic: str) -> bool:
         return True
 
@@ -144,6 +151,7 @@ async def test_sse_endpoint_no_authorization(
     mock_request: Request,
 ):
     """Test SSE endpoint without authorization function."""
+
     async def mock_subscribe(_topics):
         yield "event: test\ndata: {}\n\n"
 
